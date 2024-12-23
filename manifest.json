@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "NoteMeet Recorder",
-  "version": "1.0",
+  "version": "3.0",
   "description": "Login to NoteMeet and record your meetings seamlessly.",
   "permissions": [
     "cookies",
     "storage",
-    "webRequest",
-    "webRequestBlocking"
+    "webRequest"
   ],
   "host_permissions": [
     "https://notemeet.dineshchhantyal.com/*",

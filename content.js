@@ -439,6 +439,11 @@ let loggedOutContent;
 let attachEventListeners;
 let updatePanelContent;
 
+// Declare these at the top level with let
+let showPanel;
+let hidePanel;
+let updatePosition;
+
 function floatingWindow() {
   const minimizedPanel = document.createElement("div");
   minimizedPanel.id = "noteMeetMinimizedPanel";
@@ -499,7 +504,9 @@ function floatingWindow() {
     minimizedPanel.style.opacity = "0";
     minimizedPanel.style.pointerEvents = "none";
     isExpanded = true;
-    updatePosition(xOffset, yOffset);
+    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+      updatePosition(xOffset, yOffset);
+    }
   };
 
   const hidePanel = () => {
@@ -509,7 +516,9 @@ function floatingWindow() {
     minimizedPanel.style.opacity = "1";
     minimizedPanel.style.pointerEvents = "auto";
     isExpanded = false;
-    updatePosition(xOffset, yOffset);
+    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+      updatePosition(xOffset, yOffset);
+    }
   };
 
   // Improved event handling
@@ -717,16 +726,14 @@ function floatingWindow() {
         </div>
         <div style="border-top: 1px solid #eee; margin: 16px 0; padding-top: 16px;">
           ${createButton("Sync Status", "syncStatusButton")}
-          ${createButton("Sign Out", "signOutButton")}
         </div>
       </div>
     `;
     panel.innerHTML = loggedInContent;
     
-    // Reattach all event listeners
+    // Reattach event listeners (removed sign out related code)
     const startBtn = panel.querySelector("#startRecordingButton");
     const syncStatusBtn = panel.querySelector("#syncStatusButton");
-    const signOutBtn = panel.querySelector("#signOutButton");
 
     // Attach start recording handler
     startBtn?.addEventListener("click", async () => {
@@ -822,7 +829,7 @@ function floatingWindow() {
                 <h3 style="margin: 0 0 15px 0; color: #1a73e8;">✓ All Set!</h3>
                 <p style="margin: 0 0 15px 0; color: #5f6368;">
                     Your notes and recordings are synced with NoteMeet.
-                    Visit <a href="https://notemeet.com/dashboard" target="_blank" style="color: #1a73e8; text-decoration: none;">notemeet.com</a> 
+                    Visit <a href="https://notemeet.dineshchhantyal.com/dashboard" target="_blank" style="color: #1a73e8; text-decoration: none;">notemeet.dineshchhantyal.com</a> 
                     to access all your content.
                 </p>
                 <button style="
@@ -850,15 +857,6 @@ function floatingWindow() {
             syncStatusBtn.disabled = false;
             syncStatusBtn.textContent = originalText;
         }
-    });
-
-    // Reattach sign out handler
-    signOutBtn?.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
-            if (!response?.success) {
-                console.error("Sign out failed:", response?.error);
-            }
-        });
     });
   };
 
@@ -933,16 +931,29 @@ function floatingWindow() {
   }
 
   function updatePosition(x, y) {
-    // Update both panels to maintain relative positioning
-    minimizedPanel.style.transform = `translate(${x}px, ${y}px) ${isExpanded ? 'scale(0.8)' : 'scale(1)'}`;
+    // Calculate position relative to viewport
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const panelWidth = panel.offsetWidth;
+    const panelHeight = panel.offsetHeight;
+    const minPanelSize = 48;
+
+    const constrainedX = Math.min(Math.max(x, 0), viewportWidth - (panel.style.visibility === 'visible' ? panelWidth : minPanelSize));
+    const constrainedY = Math.min(Math.max(y, 0), viewportHeight - (panel.style.visibility === 'visible' ? panelHeight : minPanelSize));
+
+    const translate = `translate3d(${constrainedX}px, ${constrainedY}px, 0)`;
     
-    // Maintain panel's scale and position transforms
-    if (panel.style.visibility === 'visible') {
-        panel.style.transform = `translate(${x}px, ${y}px) scale(1)`;
-    } else {
-        panel.style.transform = `translate(${x}px, ${y}px) translateY(-10px) scale(0.95)`;
-    }
-  }
+    minimizedPanel.style.transform = isExpanded 
+      ? `${translate} scale(0.8)` 
+      : translate;
+    
+    panel.style.transform = panel.style.visibility === 'visible'
+      ? `${translate} scale(1)`
+      : `${translate} translateY(-10px) scale(0.95)`;
+
+    xOffset = constrainedX;
+    yOffset = constrainedY;
+  };
 
   // Add event listeners for both mouse and touch events
   [minimizedPanel, panel].forEach(element => {
@@ -966,16 +977,26 @@ function floatingWindow() {
   const originalShowPanel = showPanel;
   const originalHidePanel = hidePanel;
 
-  showPanel = () => {
-    originalShowPanel();
-    if (xOffset || yOffset) {
+  showPanel = function() {
+    panel.style.opacity = "1";
+    panel.style.visibility = "visible";
+    panel.style.pointerEvents = "auto";
+    minimizedPanel.style.opacity = "0";
+    minimizedPanel.style.pointerEvents = "none";
+    isExpanded = true;
+    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
       updatePosition(xOffset, yOffset);
     }
   };
 
-  hidePanel = () => {
-    originalHidePanel();
-    if (xOffset || yOffset) {
+  hidePanel = function() {
+    panel.style.opacity = "0";
+    panel.style.visibility = "hidden";
+    panel.style.pointerEvents = "none";
+    minimizedPanel.style.opacity = "1";
+    minimizedPanel.style.pointerEvents = "auto";
+    isExpanded = false;
+    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
       updatePosition(xOffset, yOffset);
     }
   };
