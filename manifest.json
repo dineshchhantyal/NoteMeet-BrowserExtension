@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "NoteMeet Recorder",
+  "version": "1.0",
+  "description": "Login to NoteMeet and record your meetings seamlessly.",
+  "permissions": ["activeTab", "scripting", "identity", "storage", "tabs"],
+  "host_permissions": [
+    "https://notemeet.dineshchhantyal.com/*", 
+    "https://meet.google.com/*", 
+    "https://zoom.us/*",
+    "https://*.zoom.us/*",
+    "https://teams.microsoft.com/*",
+    "https://*.teams.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "NoteMeet Recorder",
+    "default_popup": "",
+    "default_icon": "icons/icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*", "https://zoom.us/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
