@@ -1,4 +1,4 @@
-const AUTH_BASE_URL = "http://localhost:3000";
+const AUTH_BASE_URL = "https://notemeet.dineshchhantyal.com";
 
 // Add this at the top of your file
 chrome.webRequest.onHeadersReceived.addListener(
@@ -21,7 +21,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     }
     return { responseHeaders: details.responseHeaders };
   },
-  { urls: ["http://localhost:3000/*"] },
+  { urls: ["http://localhost:3000/*", "https://notemeet.dineshchhantyal.com/*"] },
   ["responseHeaders", "extraHeaders"]
 );
 
@@ -73,27 +73,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "SIGN_OUT") {
-    handleSignOut()
-      .then(() => {
-        console.log("Sign out successful");
-        // First send response to the content script that initiated sign out
-        sendResponse({ success: true });
-        
-        // Notify all tabs about the auth state change - using a more generic approach
-        chrome.tabs.query({}, (tabs) => {  // Remove URL filter to notify all tabs
-          tabs.forEach((tab) => {
-            chrome.tabs.sendMessage(tab.id, {
+    try {
+      // Clear any stored tokens/user data
+      chrome.storage.local.remove(["noteMeetToken", "noteMeetUser"], () => {
+        // Notify content script about auth state change
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, {
               type: "AUTH_STATE_CHANGED",
               user: null
-            }).catch(err => console.log(`Failed to send message to tab ${tab.id}:`, err));
-          });
+            });
+          }
         });
-      })
-      .catch((error) => {
-        console.error("Sign out error:", error);
-        sendResponse({ success: false, error: error.message });
+        
+        sendResponse({ success: true });
       });
-    return true;
+    } catch (error) {
+      console.error("Sign out error:", error);
+      sendResponse({ success: false, error: error.message });
+    }
+    return true; // Keep the message channel open for async response
   }
 
   if (message.type === 'LOGOUT') {

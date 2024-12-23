@@ -3,10 +3,11 @@ console.log("NoteMeet content script loaded");
 
 console.log("NoteMeet Extension Activated");
 
-const AUTH_BASE_URL = "http://localhost:3000";
+const AUTH_BASE_URL = "https://notemeet.dineshchhantyal.com";
 
 // Add at the top of the file, after the AUTH_BASE_URL declaration
 let panel; // Declare panel as a global variable
+const LOGO_URL = chrome.runtime.getURL('icons/icon.png');
 
 // Add these functions at the top level
 async function checkAuthStatus() {
@@ -21,6 +22,10 @@ async function handleAuth() {
   // The function can now access the global panel variable
   const loginForm = `
     <div style="text-align: center; padding: 12px 0;">
+      <img src="${LOGO_URL}" alt="NoteMeet" style="width: 120px;">
+      <h2 style="color: rgb(7, 59, 76); margin: 0 0 16px 0; font-size: 14px;">
+        NoteMeet
+      </h2>
       <form id="loginForm" style="display: flex; flex-direction: column; gap: 12px;">
         <input 
           type="email" 
@@ -385,7 +390,10 @@ function floatingWindow() {
   // Different panel content based on login state
   loggedOutContent = `
     <div style="text-align: center; padding: 12px 0;">
-      <img src="YOUR_LOGO_URL" alt="NoteMeet" style="width: 120px; margin-bottom: 12px;">
+      <img src="${LOGO_URL}" alt="NoteMeet" style="width: 120px;">
+      <h2 style="color: rgb(7, 59, 76); margin: 0 0 16px 0; font-size: 14px;">
+        NoteMeet
+      </h2>
       <p style="color: rgb(7, 59, 76); margin: 0 0 16px 0; font-size: 14px;">
         Sign in to start recording your meetings
       </p>
@@ -422,6 +430,10 @@ function floatingWindow() {
   updatePanelContent = function(user) {
     const loggedInContent = `
       <div style="text-align: center;">
+        <img src="${LOGO_URL}" alt="NoteMeet" style="width: 120px;">
+        <h2 style="color: rgb(7, 59, 76); margin: 0 0 16px 0; font-size: 14px;">
+          NoteMeet
+        </h2>
         <div style="display: flex; align-items: center; margin-bottom: 16px;">
           <div style="text-align: left;">
             <div style="font-weight: 500; color: rgb(7, 59, 76);">${user.name}</div>

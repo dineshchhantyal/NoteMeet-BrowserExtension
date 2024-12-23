@@ -10,10 +10,13 @@
     "webRequestBlocking"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "https://notemeet.dineshchhantyal.com/*",
+    "https://meet.google.com/*",
+    "https://zoom.us/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_title": "NoteMeet Recorder",
@@ -25,5 +28,9 @@
       "matches": ["https://meet.google.com/*", "https://zoom.us/*"],
       "js": ["content.js"]
     }
-  ]
+  ],
+  "web_accessible_resources": [{
+    "resources": ["icons/icon.png"],
+    "matches": ["<all_urls>"]
+  }]
 }
