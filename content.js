@@ -467,6 +467,7 @@ function floatingWindow() {
   updatePanelContent = function(user) {
     const loggedInContent = `
       <div style="text-align: center;">
+        ${createHeader()}
         <div style="display: flex; align-items: center; margin-bottom: 16px;">
           <div style="text-align: left;">
             <div style="font-weight: 500; color: rgb(7, 59, 76);">${user.name}</div>
