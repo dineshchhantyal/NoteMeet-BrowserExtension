@@ -118,139 +118,61 @@ function uploadToNoteMeet(blob) {
     .catch((error) => console.error("Upload failed:", error));
 }
 
+// Add these variables at the top level
+window.recordedVideoBase64 = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+
+// Update the startRecording function
 async function startRecording() {
-  try {
-    // Hide the div with aria-label="Meet keeps you safe"
-    const hidePopupStyle = document.createElement("style");
-    hidePopupStyle.textContent = `
-        div[aria-label="Meet keeps you safe"],
-        div[role="dialog"][data-is-persistent="true"] { 
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-        }`;
+    try {
+        recordedChunks = []; // Reset chunks array
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
 
-    document.documentElement.appendChild(hidePopupStyle);
-
-    console.log("Requesting screen and audio capture...");
-
-    // Capture screen video and audio
-    const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        displaySurface: "browser",
-        width: { ideal: 1920, max: 1920 },
-        height: { ideal: 1080, max: 1080 },
-      },
-      audio: true,
-    });
-
-    if (!screenStream || screenStream.getTracks().length === 0) {
-      throw new Error(
-        "No media stream returned. User might have cancelled sharing."
-      );
+        mediaRecorder.start();
+        console.log("Recording started");
+    } catch (error) {
+        console.error("Error starting recording:", error);
     }
-
-    console.log("Screen capture stream obtained.");
-
-    // Create an AudioContext for combining audio streams
-    const audioContext = new AudioContext();
-
-    // Only create screen audio source if there's an audio track
-    let screenAudioStream;
-    const screenAudioTracks = screenStream.getAudioTracks();
-    if (screenAudioTracks.length > 0) {
-      screenAudioStream = audioContext.createMediaStreamSource(screenStream);
-    }
-
-    // Get audio from DOM elements (if any)
-    const audioElements = Array.from(document.querySelectorAll("audio"));
-    const audioElementStreams = audioElements
-      .map((audio) => {
-        if (audio.srcObject) {
-          return audioContext.createMediaStreamSource(audio.srcObject);
-        } else {
-          console.warn("Audio element does not have a valid srcObject:", audio);
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    // Create a destination for combined audio
-    const audioDest = audioContext.createMediaStreamDestination();
-    if (screenAudioStream) {
-      screenAudioStream.connect(audioDest);
-    }
-    audioElementStreams.forEach((stream) => stream.connect(audioDest));
-
-    // Combine screen video and combined audio
-    const combinedStream = new MediaStream([
-      ...screenStream.getVideoTracks(),
-      ...audioDest.stream.getAudioTracks(),
-    ]);
-
-    console.log("MediaRecorder initializing...");
-
-    const startRecording = (stream) => {
-      const recorder = new MediaRecorder(stream, {
-        mimeType: "video/webm; codecs=vp8,opus",
-      });
-      const chunks = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
-
-      const stopped = new Promise((resolve) => (recorder.onstop = resolve));
-
-      recorder.start();
-      console.log(
-        "Recording started. Call window.stopScreenRecording() to stop recording."
-      );
-
-      return {
-        recorder,
-        stop: () => {
-          if (recorder.state === "recording") {
-            recorder.stop();
-          }
-          return stopped.then(() => new Blob(chunks, { type: "video/webm" }));
-        },
-      };
-    };
-
-    const { recorder, stop } = startRecording(combinedStream);
-
-    window.stopScreenRecording = async () => {
-      console.log("Stopping recording...");
-      const recordedBlob = await stop();
-
-      // Convert the recorded video to a Base64 string
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        window.recordedVideoBase64 = reader.result; // Base64 without the data prefix
-        console.log(
-          "Base64 video data available at window.recordedVideoBase64."
-        );
-      };
-      reader.readAsDataURL(recordedBlob);
-
-      console.log("Recording processing completed.");
-
-      // Cleanup resources
-      screenStream.getTracks().forEach((track) => track.stop());
-      audioContext.close();
-
-      //   download the recording
-      const downloadLink = document.createElement("a");
-      window.recordedVideoBase64 = reader.result.split(",")[1];
-      downloadLink.href = window.recordedVideoBase64;
-      downloadLink.download = "recording.webm";
-      downloadLink.click();
-    };
-  } catch (error) {
-    console.error("Error during screen recording:", error);
-  }
 }
+
+// Update stopScreenRecording function
+window.stopScreenRecording = async () => {
+    try {
+        console.log("Stopping recording...");
+        mediaRecorder.stop();
+        
+        return new Promise((resolve) => {
+            mediaRecorder.onstop = async () => {
+                console.log("MediaRecorder stopped");
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                console.log("Blob created:", blob);
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    console.log("FileReader loaded");
+                    window.recordedVideoBase64 = reader.result.split(',')[1];
+                    console.log("Base64 data length:", window.recordedVideoBase64?.length);
+                    resolve();
+                };
+                reader.onerror = (error) => {
+                    console.error("FileReader error:", error);
+                    resolve();
+                };
+                reader.readAsDataURL(blob);
+            };
+        });
+    } catch (error) {
+        console.error("Error stopping recording:", error);
+    }
+};
 
 // Move these variables and functions to the global scope (outside of floatingWindow)
 let loggedOutContent;
@@ -343,25 +265,19 @@ function floatingWindow() {
     const loggedInContent = `
       <div style="text-align: center;">
         <div style="display: flex; align-items: center; margin-bottom: 16px;">
-          <img src="${
-            user.avatar || "icons/icon.png"
-          }" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px;">
           <div style="text-align: left;">
-            <div style="font-weight: 500; color: rgb(7, 59, 76);">${
-              user.name
-            }</div>
+            <div style="font-weight: 500; color: rgb(7, 59, 76);">${user.name}</div>
             <div style="font-size: 12px; color: #666;">${user.email}</div>
           </div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Recordings left this month</div>
-          <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${
-            user.recordingsLeft
-          }</div>
-          <div style="font-size: 12px; color: #666;">${user.plan} Plan</div>
+          <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.recordingsLeft ?? 1}</div>
+          <div style="font-size: 12px; color: #666;">${user.plan ?? "Free"}</div>
         </div>
-        ${createButton("Start Recording", "startRecordingButton", true)}
-        ${createButton("Stop Recording", "stopRecordingButton")}
+        <div id="recordingControls">
+          ${createButton("Start Recording", "startRecordingButton", true)}
+        </div>
         <div style="border-top: 1px solid #eee; margin: 16px 0; padding-top: 16px;">
           ${createButton("Sign Out", "signOutButton")}
         </div>
@@ -369,20 +285,60 @@ function floatingWindow() {
     `;
     panel.innerHTML = loggedInContent;
     
-    // Move event listeners here, after the content is added to DOM
+    // Add event listeners
     const startBtn = panel.querySelector("#startRecordingButton");
-    const stopBtn = panel.querySelector("#stopRecordingButton");
     const signOutBtn = panel.querySelector("#signOutButton");
 
-    startBtn?.addEventListener("click", startRecording);
-    stopBtn?.addEventListener("click", () => window.stopScreenRecording());
-    signOutBtn?.addEventListener("click", (e) => {
-        console.log("Sign out button clicked", e.target);  // Debug log
-        console.log("Sign out clicked");
+    startBtn?.addEventListener("click", async () => {
+        startBtn.disabled = true;
+        startBtn.textContent = "Starting...";
+        await startRecording();
+        const controlsDiv = panel.querySelector("#recordingControls");
+        controlsDiv.innerHTML = `
+            ${createButton("Stop Recording", "stopRecordingButton")}
+            <div style="font-size: 12px; color: #666; margin-top: 8px;">Recording in progress...</div>
+        `;
+        const stopBtn = panel.querySelector("#stopRecordingButton");
+        stopBtn?.addEventListener("click", async () => {
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Processing...";
+            await window.stopScreenRecording();
+            
+            // Wait for the FileReader to complete
+            const waitForBase64 = new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (window.recordedVideoBase64) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 100);
+            });
+
+            await waitForBase64;
+
+            controlsDiv.innerHTML = `
+                ${createButton("Start New Recording", "startRecordingButton", true)}
+                ${createButton("Save Recording Locally", "saveRecordingButton")}
+            `;
+            // Reattach event listeners
+            panel.querySelector("#startRecordingButton")?.addEventListener("click", startRecording);
+            panel.querySelector("#saveRecordingButton")?.addEventListener("click", () => {
+                const downloadLink = document.createElement("a");
+                downloadLink.href = `data:video/webm;base64,${window.recordedVideoBase64}`;
+                downloadLink.download = `NoteMeet_Recording_${new Date().toISOString()}.webm`;
+                downloadLink.click();
+            });
+        });
+    });
+
+    signOutBtn?.addEventListener("click", () => {
+        signOutBtn.disabled = true;
+        signOutBtn.textContent = "Signing out...";
         chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
-            console.log("Sign out response:", response);
             if (!response?.success) {
                 console.error("Sign out failed:", response?.error);
+                signOutBtn.disabled = false;
+                signOutBtn.textContent = "Sign Out";
             }
         });
     });
