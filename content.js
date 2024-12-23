@@ -53,8 +53,23 @@ async function handleAuth() {
           background-color: rgb(46, 196, 182);
           color: white;
           cursor: pointer;
-        ">
-          Sign In
+          position: relative;
+          min-width: 100px;
+        " id="loginSubmitButton">
+          <span>Sign In</span>
+          <div class="loading-spinner" style="
+            display: none;
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          "></div>
         </button>
         <a href=${AUTH_BASE_URL}
             style="font-size: 12px; color: #666; text-decoration: none;">
@@ -78,6 +93,14 @@ async function handleAuth() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    // Add loading state
+    const submitButton = document.getElementById("loginSubmitButton");
+    const spinner = submitButton.querySelector(".loading-spinner");
+    const buttonText = submitButton.querySelector("span");
+    submitButton.disabled = true;
+    spinner.style.display = "block";
+    buttonText.textContent = "Signing in...";
+
     try {
       // Send message to background script to handle the authentication 
       const message = {
@@ -96,6 +119,11 @@ async function handleAuth() {
           const errorDiv = document.getElementById("loginError");
           errorDiv.textContent = response.error || "Login failed";
           errorDiv.style.display = "block";
+          
+          // Reset button state on error
+          submitButton.disabled = false;
+          spinner.style.display = "none";
+          buttonText.textContent = "Sign In";
         }
       });
     } catch (error) {
@@ -103,6 +131,11 @@ async function handleAuth() {
       const errorDiv = document.getElementById("loginError");
       errorDiv.textContent = "Login failed";
       errorDiv.style.display = "block";
+
+      // Reset button state on error
+      submitButton.disabled = false;
+      spinner.style.display = "none";
+      buttonText.textContent = "Sign In";
     }
   });
 }
