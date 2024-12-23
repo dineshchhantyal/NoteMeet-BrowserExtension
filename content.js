@@ -123,56 +123,214 @@ window.recordedVideoBase64 = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 
-// Update the startRecording function
+// Add these at the top level (global scope)
+let recorder = null;
+let screenStream = null;
+let micStream = null;
+let audioContext = null;
+let stopRecordingPromise = null;
+
+// Add this at the top with other global variables
+let isRecording = false;
+let recordButton = null; // Add this to track the button globally
+
+// Define stopScreenRecording in global scope
+window.stopScreenRecording = async () => {
+    console.log('Stopping recording...');
+    try {
+        // Update UI immediately when stopping
+        const recordButton = document.querySelector("#startRecordingButton");
+        if (recordButton) {
+            recordButton.textContent = "New Recording";
+            recordButton.style.backgroundColor = "#1a73e8";
+            isRecording = false;
+        }
+
+        if (recorder && recorder.state === 'recording') {
+            console.log('Recorder state:', recorder.state);
+            
+            // Create the stop recording promise before stopping
+            stopRecordingPromise = new Promise((resolve) => {
+                recorder.onstop = () => {
+                    console.log('Recording stopped');
+                    resolve();
+                };
+            });
+            
+            // Stop the recording
+            recorder.stop();
+            
+            // Wait for the recording to stop
+            await stopRecordingPromise;
+            console.log('Stop promise resolved');
+            
+            const recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+            console.log('Blob created:', recordedBlob.size, 'bytes');
+
+            // Convert to Base64
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                window.recordedVideoBase64 = reader.result;
+                console.log('Base64 conversion complete');
+            };
+            reader.readAsDataURL(recordedBlob);
+
+            // Cleanup resources
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('Screen track stopped');
+                });
+            }
+            if (micStream) {
+                micStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('Mic track stopped');
+                });
+            }
+            if (audioContext) {
+                await audioContext.close();
+                console.log('Audio context closed');
+            }
+            
+            console.log('Cleanup complete');
+        } else {
+            console.log('Recorder not active:', recorder?.state);
+        }
+    } catch (error) {
+        console.error('Error stopping recording:', error);
+    }
+};
+
 async function startRecording() {
     try {
+        // Update UI BEFORE starting the recording
+        if (!recordButton) {
+            recordButton = document.querySelector("#startRecordingButton");
+        }
+
+        // Immediately update UI to show recording state
+        if (recordButton) {
+            isRecording = true;
+            recordButton.textContent = "Stop Recording";
+            recordButton.style.backgroundColor = "#ea4335";
+            recordButton.style.animation = "pulse 2s infinite"; // Add pulsing effect
+        }
+
+        // Add CSS for pulsing effect if it doesn't exist
+        if (!document.querySelector('#recording-pulse-style')) {
+            const style = document.createElement('style');
+            style.id = 'recording-pulse-style';
+            style.textContent = `
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.7; }
+                    100% { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         recordedChunks = []; // Reset chunks array
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        mediaRecorder = new MediaRecorder(stream);
+        console.log('Starting recording...');
+
+        // Hide the div with aria-label="Meet keeps you safe"
+        const hidePopupStyle = document.createElement('style');
+        hidePopupStyle.textContent = `
+            div[aria-label="Meet keeps you safe"],
+            div[role="dialog"][data-is-persistent="true"] { 
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+        `;
+        document.documentElement.appendChild(hidePopupStyle);
+
+        console.log('Requesting screen and audio capture...');
+
+        // Get system audio and screen
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                displaySurface: "browser",
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                selfBrowserSurface: "include"
+            },
+            audio: true,
+            selfBrowserSurface: "include"
+
+        });
+
+        // Get microphone audio
+        micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 2
+            },
+            video: false,
+        });
+
+        // Create AudioContext and destination first
+        audioContext = new AudioContext();
+        const audioDest = audioContext.createMediaStreamDestination();
         
-        mediaRecorder.ondataavailable = (event) => {
+        // Then create and connect sources
+        if (screenStream.getAudioTracks().length > 0) {
+            const screenAudioSource = audioContext.createMediaStreamSource(screenStream);
+            screenAudioSource.connect(audioDest);
+        }
+
+        if (micStream.getAudioTracks().length > 0) {
+            const micAudioSource = audioContext.createMediaStreamSource(micStream);
+            micAudioSource.connect(audioDest);
+        }
+
+        // Get audio from DOM elements (meeting participants)
+        const audioElements = Array.from(document.querySelectorAll('audio, video'));
+        audioElements.forEach(element => {
+            if (element.srcObject && element.srcObject.getAudioTracks().length > 0) {
+                const source = audioContext.createMediaStreamSource(element.srcObject);
+                source.connect(audioDest);
+            }
+        });
+
+        // Combine screen video and all audio
+        const combinedStream = new MediaStream([
+            ...screenStream.getVideoTracks(),
+            ...audioDest.stream.getAudioTracks()
+        ]);
+
+        // Create the MediaRecorder instance and store it in the global variable
+        recorder = new MediaRecorder(combinedStream, {
+            mimeType: 'video/webm; codecs=vp8,opus',
+            audioBitsPerSecond: 128000
+        });
+
+        recorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
+                console.log('Data available, chunk size:', event.data.size);
                 recordedChunks.push(event.data);
             }
         };
 
-        mediaRecorder.start();
-        console.log("Recording started");
+        stopRecordingPromise = new Promise((resolve) => recorder.onstop = resolve);
+
+        recorder.start();
+        console.log('Recording started, recorder state:', recorder.state);
+
     } catch (error) {
-        console.error("Error starting recording:", error);
+        console.error('Error during screen recording:', error);
+        // Reset UI if recording fails
+        if (recordButton) {
+            isRecording = false;
+            recordButton.textContent = "New Recording";
+            recordButton.style.backgroundColor = "#1a73e8";
+            recordButton.style.animation = "none";
+        }
     }
 }
-
-// Update stopScreenRecording function
-window.stopScreenRecording = async () => {
-    try {
-        console.log("Stopping recording...");
-        mediaRecorder.stop();
-        
-        return new Promise((resolve) => {
-            mediaRecorder.onstop = async () => {
-                console.log("MediaRecorder stopped");
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                console.log("Blob created:", blob);
-                
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    console.log("FileReader loaded");
-                    window.recordedVideoBase64 = reader.result.split(',')[1];
-                    console.log("Base64 data length:", window.recordedVideoBase64?.length);
-                    resolve();
-                };
-                reader.onerror = (error) => {
-                    console.error("FileReader error:", error);
-                    resolve();
-                };
-                reader.readAsDataURL(blob);
-            };
-        });
-    } catch (error) {
-        console.error("Error stopping recording:", error);
-    }
-};
 
 // Move these variables and functions to the global scope (outside of floatingWindow)
 let loggedOutContent;
@@ -279,66 +437,147 @@ function floatingWindow() {
           ${createButton("Start Recording", "startRecordingButton", true)}
         </div>
         <div style="border-top: 1px solid #eee; margin: 16px 0; padding-top: 16px;">
+          ${createButton("Sync Status", "syncStatusButton")}
           ${createButton("Sign Out", "signOutButton")}
         </div>
       </div>
     `;
     panel.innerHTML = loggedInContent;
     
-    // Add event listeners
+    // Reattach all event listeners
     const startBtn = panel.querySelector("#startRecordingButton");
+    const syncStatusBtn = panel.querySelector("#syncStatusButton");
     const signOutBtn = panel.querySelector("#signOutButton");
 
+    // Attach start recording handler
     startBtn?.addEventListener("click", async () => {
         startBtn.disabled = true;
         startBtn.textContent = "Starting...";
-        await startRecording();
-        const controlsDiv = panel.querySelector("#recordingControls");
-        controlsDiv.innerHTML = `
-            ${createButton("Stop Recording", "stopRecordingButton")}
-            <div style="font-size: 12px; color: #666; margin-top: 8px;">Recording in progress...</div>
-        `;
-        const stopBtn = panel.querySelector("#stopRecordingButton");
-        stopBtn?.addEventListener("click", async () => {
-            stopBtn.disabled = true;
-            stopBtn.textContent = "Processing...";
-            await window.stopScreenRecording();
-            
-            // Wait for the FileReader to complete
-            const waitForBase64 = new Promise((resolve) => {
-                const checkInterval = setInterval(() => {
-                    if (window.recordedVideoBase64) {
-                        clearInterval(checkInterval);
-                        resolve();
-                    }
-                }, 100);
-            });
-
-            await waitForBase64;
-
+        try {
+            await startRecording();
+            const controlsDiv = panel.querySelector("#recordingControls");
             controlsDiv.innerHTML = `
-                ${createButton("Start New Recording", "startRecordingButton", true)}
-                ${createButton("Save Recording Locally", "saveRecordingButton")}
+                ${createButton("Stop Recording", "stopRecordingButton")}
+                <div style="font-size: 12px; color: #666; margin-top: 8px;">Recording in progress...</div>
             `;
-            // Reattach event listeners
-            panel.querySelector("#startRecordingButton")?.addEventListener("click", startRecording);
-            panel.querySelector("#saveRecordingButton")?.addEventListener("click", () => {
-                const downloadLink = document.createElement("a");
-                downloadLink.href = `data:video/webm;base64,${window.recordedVideoBase64}`;
-                downloadLink.download = `NoteMeet_Recording_${new Date().toISOString()}.webm`;
-                downloadLink.click();
+            
+            // Reattach stop recording handler
+            const stopBtn = panel.querySelector("#stopRecordingButton");
+            stopBtn?.addEventListener("click", async () => {
+                stopBtn.disabled = true;
+                stopBtn.textContent = "Processing...";
+                await window.stopScreenRecording();
+                
+                // Wait for Base64 conversion
+                const waitForBase64 = new Promise((resolve) => {
+                    const checkInterval = setInterval(() => {
+                        if (window.recordedVideoBase64) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+                });
+
+                await waitForBase64;
+
+                // Update controls and reattach handlers
+                controlsDiv.innerHTML = `
+                    ${createButton("Start New Recording", "startRecordingButton", true)}
+                    ${createButton("Save Recording Locally", "saveRecordingButton")}
+                `;
+                
+                // Reattach new recording button handler
+                panel.querySelector("#startRecordingButton")?.addEventListener("click", () => {
+                    updatePanelContent(user); // Reset to initial state
+                });
+
+                // Attach save recording handler
+                panel.querySelector("#saveRecordingButton")?.addEventListener("click", () => {
+                    try {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const downloadLink = document.createElement("a");
+                        downloadLink.href = url;
+                        downloadLink.download = `NoteMeet_Recording_${new Date().toISOString().slice(0,19)}.webm`;
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                        URL.revokeObjectURL(url);
+                    } catch (error) {
+                        console.error('Error downloading recording:', error);
+                    }
+                });
             });
-        });
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            startBtn.disabled = false;
+            startBtn.textContent = "Start Recording";
+        }
     });
 
+    // Reattach sync status handler
+    syncStatusBtn?.addEventListener("click", async () => {
+        console.log("Sync status clicked");
+        syncStatusBtn.disabled = true;
+        const originalText = syncStatusBtn.textContent;
+        syncStatusBtn.textContent = "Checking sync status...";
+        
+        try {
+            // Show sync confirmation dialog
+            const syncDialog = document.createElement('div');
+            syncDialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 10000;
+                max-width: 400px;
+                text-align: center;
+            `;
+            
+            syncDialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #1a73e8;">✓ All Set!</h3>
+                <p style="margin: 0 0 15px 0; color: #5f6368;">
+                    Your notes and recordings are synced with NoteMeet.
+                    Visit <a href="https://notemeet.com/dashboard" target="_blank" style="color: #1a73e8; text-decoration: none;">notemeet.com</a> 
+                    to access all your content.
+                </p>
+                <button style="
+                    background: #1a73e8;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Got it</button>
+            `;
+
+            document.body.appendChild(syncDialog);
+
+            // Handle close button
+            const closeBtn = syncDialog.querySelector('button');
+            closeBtn.onclick = () => {
+                document.body.removeChild(syncDialog);
+                syncStatusBtn.disabled = false;
+                syncStatusBtn.textContent = originalText;
+            };
+
+        } catch (error) {
+            console.error("Error showing sync status:", error);
+            syncStatusBtn.disabled = false;
+            syncStatusBtn.textContent = originalText;
+        }
+    });
+
+    // Reattach sign out handler
     signOutBtn?.addEventListener("click", () => {
-        signOutBtn.disabled = true;
-        signOutBtn.textContent = "Signing out...";
         chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
             if (!response?.success) {
                 console.error("Sign out failed:", response?.error);
-                signOutBtn.disabled = false;
-                signOutBtn.textContent = "Sign Out";
             }
         });
     });
