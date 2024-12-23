@@ -3,14 +3,14 @@
   "name": "NoteMeet Recorder",
   "version": "1.0",
   "description": "Login to NoteMeet and record your meetings seamlessly.",
-  "permissions": ["activeTab", "scripting", "identity", "storage", "tabs"],
+  "permissions": [
+    "cookies",
+    "storage",
+    "webRequest",
+    "webRequestBlocking"
+  ],
   "host_permissions": [
-    "https://notemeet.dineshchhantyal.com/*", 
-    "https://meet.google.com/*", 
-    "https://zoom.us/*",
-    "https://*.zoom.us/*",
-    "https://teams.microsoft.com/*",
-    "https://*.teams.microsoft.com/*"
+    "http://localhost:3000/*"
   ],
   "background": {
     "service_worker": "background.js"
