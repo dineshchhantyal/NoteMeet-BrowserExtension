@@ -177,7 +177,64 @@ let stopRecordingPromise = null;
 
 // Add this at the top with other global variables
 let isRecording = false;
-let recordButton = null; // Add this to track the button globally
+let recordButton = null;
+
+// Add styles to document head
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes recording-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.4);
+      border-color: rgba(234, 67, 53, 0.8);
+    }
+    70% {
+      box-shadow: 0 0 0 15px rgba(234, 67, 53, 0);
+      border-color: rgba(234, 67, 53, 1);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(234, 67, 53, 0);
+      border-color: rgba(234, 67, 53, 0.8);
+    }
+  }
+
+  @keyframes status-dot-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .recording-status {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ea4335;
+    animation: status-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .processing-status {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #fbbc04;
+    animation: status-dot-pulse 1s ease-in-out infinite;
+  }
+`;
+document.head.appendChild(style);
 
 // Define stopScreenRecording in global scope
 window.stopScreenRecording = async () => {
@@ -383,8 +440,33 @@ let attachEventListeners;
 let updatePanelContent;
 
 function floatingWindow() {
-  // Update panel declaration to use the global variable
-  panel = document.createElement("div"); // Remove 'const' to use global variable
+  const minimizedPanel = document.createElement("div");
+  minimizedPanel.id = "noteMeetMinimizedPanel";
+  minimizedPanel.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    background-color: #ffffff;
+    border: 2px solid rgb(46, 196, 182);
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(7, 59, 76, 0.12);
+    z-index: 9999;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 1;
+    transform: scale(1);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  `;
+
+  // Update panel styles for smoother transitions
+  panel = document.createElement("div");
   panel.id = "noteMeetPanel";
   panel.style.cssText = `
     position: fixed;
@@ -396,10 +478,161 @@ function floatingWindow() {
     border: 2px solid rgb(46, 196, 182);
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(7, 59, 76, 0.12);
-    z-index: 9999;
+    z-index: 9998;
     padding: 16px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(0.95);
+    transform-origin: top right;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
   `;
+
+  const showPanel = () => {
+    panel.style.opacity = "1";
+    panel.style.visibility = "visible";
+    panel.style.pointerEvents = "auto";
+    minimizedPanel.style.opacity = "0";
+    minimizedPanel.style.pointerEvents = "none";
+    isExpanded = true;
+    updatePosition(xOffset, yOffset);
+  };
+
+  const hidePanel = () => {
+    panel.style.opacity = "0";
+    panel.style.visibility = "hidden";
+    panel.style.pointerEvents = "none";
+    minimizedPanel.style.opacity = "1";
+    minimizedPanel.style.pointerEvents = "auto";
+    isExpanded = false;
+    updatePosition(xOffset, yOffset);
+  };
+
+  // Improved event handling
+  let timeoutId = null;
+
+  minimizedPanel.addEventListener("mouseenter", () => {
+    clearTimeout(timeoutId);
+    showPanel();
+  });
+
+  panel.addEventListener("mouseenter", () => {
+    clearTimeout(timeoutId);
+  });
+
+  panel.addEventListener("mouseleave", (event) => {
+    // Check if we're not moving to the minimized panel
+    if (!minimizedPanel.contains(event.relatedTarget)) {
+      timeoutId = setTimeout(hidePanel, 300); // Reduced delay for better responsiveness
+    }
+  });
+
+  minimizedPanel.addEventListener("mouseleave", (event) => {
+    // Check if we're not moving to the main panel
+    if (!panel.contains(event.relatedTarget)) {
+      timeoutId = setTimeout(hidePanel, 300);
+    }
+  });
+
+  // Focus handling for accessibility
+  minimizedPanel.addEventListener("focus", showPanel);
+  panel.addEventListener("focus", () => {
+    clearTimeout(timeoutId);
+  });
+
+  panel.addEventListener("blur", (event) => {
+    if (!panel.contains(event.relatedTarget)) {
+      timeoutId = setTimeout(hidePanel, 300);
+    }
+  });
+
+  // Add status indicator inside minimized panel
+  const statusIndicator = document.createElement("div");
+  statusIndicator.id = "noteMeetStatusIndicator";
+  statusIndicator.style.cssText = `
+    width: 32px;
+    height: 32px;
+    background-image: url(${LOGO_URL});
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+  `;
+  minimizedPanel.appendChild(statusIndicator);
+
+  // Update status indicator based on recording state
+  const updateStatus = (status) => {
+    // Remove any existing status indicators
+    const existingStatus = minimizedPanel.querySelector('.recording-status, .processing-status');
+    if (existingStatus) {
+        existingStatus.remove();
+    }
+
+    // Reset any existing animations and styles
+    minimizedPanel.style.animation = 'none';
+    minimizedPanel.style.borderColor = '';
+    minimizedPanel.style.boxShadow = '';
+
+    switch(status) {
+        case 'recording':
+            // Apply recording styles
+            minimizedPanel.style.animation = 'recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite';
+            minimizedPanel.style.borderColor = '#ea4335';
+            
+            const recordingDot = document.createElement('div');
+            recordingDot.className = 'recording-status';
+            minimizedPanel.appendChild(recordingDot);
+            break;
+
+        case 'processing':
+            // Apply processing styles
+            minimizedPanel.style.borderColor = '#fbbc04';
+            
+            const processingDot = document.createElement('div');
+            processingDot.className = 'processing-status';
+            minimizedPanel.appendChild(processingDot);
+            break;
+
+        default: // idle
+            // Reset to default styles
+            minimizedPanel.style.borderColor = 'rgb(46, 196, 182)';
+            minimizedPanel.style.boxShadow = '0 4px 12px rgba(7, 59, 76, 0.12)';
+            break;
+    }
+  };
+
+  // Event listeners for panel interactions
+  minimizedPanel.addEventListener("click", showPanel);
+  
+  panel.addEventListener("mouseleave", () => {
+    timeoutId = setTimeout(hidePanel, 1000);
+  });
+
+  panel.addEventListener("mouseenter", () => {
+    clearTimeout(timeoutId);
+  });
+
+  // Add both panels to the document
+  document.body.appendChild(minimizedPanel);
+  document.body.appendChild(panel);
+
+  // Update the startRecording function to handle status
+  const originalStartRecording = startRecording;
+  window.startRecording = async function() {
+    updateStatus('recording');
+    await originalStartRecording();
+  };
+
+  // Update stopScreenRecording to handle status
+  const originalStopScreenRecording = window.stopScreenRecording;
+  window.stopScreenRecording = async function() {
+    updateStatus('processing');
+    await originalStopScreenRecording();
+    updateStatus('idle');
+  };
 
   // Helper function to create styled buttons
   const createButton = (text, id, primary = false) => `
@@ -640,10 +873,7 @@ function floatingWindow() {
     }
   });
 
-  // Add the panel to the body
-  document.body.appendChild(panel);
-
-  // Make the panel draggable
+  // Dragging functionality
   let isDragging = false;
   let currentX;
   let currentY;
@@ -652,26 +882,49 @@ function floatingWindow() {
   let xOffset = 0;
   let yOffset = 0;
 
-  panel.addEventListener("mousedown", dragStart);
-  document.addEventListener("mousemove", drag);
-  document.addEventListener("mouseup", dragEnd);
-
   function dragStart(e) {
-    initialX = e.clientX - xOffset;
-    initialY = e.clientY - yOffset;
-    if (e.target === panel) {
-      isDragging = true;
+    if (e.type === "touchstart") {
+      initialX = e.touches[0].clientX - xOffset;
+      initialY = e.touches[0].clientY - yOffset;
+    } else {
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
     }
+
+    isDragging = true;
   }
 
   function drag(e) {
     if (isDragging) {
       e.preventDefault();
-      currentX = e.clientX - initialX;
-      currentY = e.clientY - initialY;
+
+      let clientX, clientY;
+      if (e.type === "touchmove") {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      currentX = clientX - initialX;
+      currentY = clientY - initialY;
+
+      // Constrain to viewport
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const panelWidth = panel.offsetWidth;
+      const panelHeight = panel.offsetHeight;
+      const minPanelWidth = 48; // Size of minimized panel
+
+      currentX = Math.min(Math.max(currentX, 0), viewportWidth - (panel.style.visibility === 'visible' ? panelWidth : minPanelWidth));
+      currentY = Math.min(Math.max(currentY, 0), viewportHeight - (panel.style.visibility === 'visible' ? panelHeight : minPanelWidth));
+
       xOffset = currentX;
       yOffset = currentY;
-      panel.style.transform = `translate(${currentX}px, ${currentY}px)`;
+
+      // Update both panels' positions
+      updatePosition(currentX, currentY);
     }
   }
 
@@ -679,8 +932,60 @@ function floatingWindow() {
     isDragging = false;
   }
 
-  // Add event listeners for buttons
-  // ... rest of your event listeners ...
+  function updatePosition(x, y) {
+    // Update both panels to maintain relative positioning
+    minimizedPanel.style.transform = `translate(${x}px, ${y}px) ${isExpanded ? 'scale(0.8)' : 'scale(1)'}`;
+    
+    // Maintain panel's scale and position transforms
+    if (panel.style.visibility === 'visible') {
+        panel.style.transform = `translate(${x}px, ${y}px) scale(1)`;
+    } else {
+        panel.style.transform = `translate(${x}px, ${y}px) translateY(-10px) scale(0.95)`;
+    }
+  }
+
+  // Add event listeners for both mouse and touch events
+  [minimizedPanel, panel].forEach(element => {
+    // Mouse events
+    element.addEventListener('mousedown', dragStart);
+    
+    // Touch events
+    element.addEventListener('touchstart', dragStart, { passive: false });
+    
+    // Add cursor style
+    element.style.cursor = 'move';
+  });
+
+  // Add document-level event listeners
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+  document.addEventListener('touchmove', drag, { passive: false });
+  document.addEventListener('touchend', dragEnd);
+
+  // Modify show/hide panel functions to maintain position
+  const originalShowPanel = showPanel;
+  const originalHidePanel = hidePanel;
+
+  showPanel = () => {
+    originalShowPanel();
+    if (xOffset || yOffset) {
+      updatePosition(xOffset, yOffset);
+    }
+  };
+
+  hidePanel = () => {
+    originalHidePanel();
+    if (xOffset || yOffset) {
+      updatePosition(xOffset, yOffset);
+    }
+  };
+
+  // Update minimizedPanel styles to support the new animations
+  minimizedPanel.style.cssText += `
+    position: relative;
+    transition: border-color 0.3s ease-in-out;
+    will-change: transform, border-color, box-shadow;
+  `;
 }
 
 floatingWindow();
