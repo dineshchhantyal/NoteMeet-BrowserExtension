@@ -1,0 +1,44 @@
+{
+  "manifest_version": 2,
+  "name": "NoteMeet",
+  "version": "1.0",
+  "description": "Take notes and record Google Meet sessions",
+  "icons": {
+    "48": "icons/icon.png",
+    "96": "icons/icon.png"
+  },
+  "permissions": [
+    "storage",
+    "cookies",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>",
+    "tabs"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "http://localhost:3000/*",
+        "https://notemeet.dineshchhantyal.com/*"
+      ],
+      "js": ["content.js"]
+    }
+  ],
+  "browser_action": {
+    "default_icon": "icons/icon.png",
+    "default_popup": "popup.html",
+    "default_title": "NoteMeet"
+  },
+  "web_accessible_resources": [
+    "icons/icon.png"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "notemeet@dineshchhantyal.com"
+    }
+  }
+}
