@@ -1,9 +1,5 @@
 // Content script that runs on Google Meet pages
-console.log("NoteMeet content script loaded");
-
-console.log("NoteMeet Extension Activated");
-
-const AUTH_BASE_URL = "https://notemeet.dineshchhantyal.com";
+const AUTH_BASE_URL = "http://localhost:3000";
 
 // Add at the top of the file, after the AUTH_BASE_URL declaration
 let panel; // Declare panel as a global variable
@@ -156,6 +152,9 @@ let stopRecordingPromise = null;
 let isRecording = false;
 let recordButton = null;
 
+// Add this at the top level to define isExpanded
+let isExpanded = false; // Define isExpanded in the global scope
+
 // Add styles to document head
 const style = document.createElement("style");
 style.textContent = `
@@ -215,7 +214,6 @@ document.head.appendChild(style);
 
 // Define stopScreenRecording in global scope
 window.stopScreenRecording = async () => {
-  console.log("Stopping recording...");
   try {
     // Update UI immediately when stopping
     const recordButton = document.querySelector("#startRecordingButton");
@@ -226,12 +224,10 @@ window.stopScreenRecording = async () => {
     }
 
     if (recorder && recorder.state === "recording") {
-      console.log("Recorder state:", recorder.state);
 
       // Create the stop recording promise before stopping
       stopRecordingPromise = new Promise((resolve) => {
         recorder.onstop = () => {
-          console.log("Recording stopped");
           resolve();
         };
       });
@@ -241,16 +237,13 @@ window.stopScreenRecording = async () => {
 
       // Wait for the recording to stop
       await stopRecordingPromise;
-      console.log("Stop promise resolved");
 
-      const recordedBlob = new Blob(recordedChunks, { type: "video/mp4" });
-      console.log("Blob created:", recordedBlob.size, "bytes");
+      const recordedBlob = new Blob(recordedChunks, { type: "video/webm" });
 
       // Convert to Base64
       const reader = new FileReader();
       reader.onloadend = () => {
         window.recordedVideoBase64 = reader.result;
-        console.log("Base64 conversion complete");
       };
       reader.readAsDataURL(recordedBlob);
 
@@ -258,23 +251,18 @@ window.stopScreenRecording = async () => {
       if (screenStream) {
         screenStream.getTracks().forEach((track) => {
           track.stop();
-          console.log("Screen track stopped");
         });
       }
       if (micStream) {
         micStream.getTracks().forEach((track) => {
           track.stop();
-          console.log("Mic track stopped");
         });
       }
       if (audioContext) {
         await audioContext.close();
-        console.log("Audio context closed");
       }
 
-      console.log("Cleanup complete");
     } else {
-      console.log("Recorder not active:", recorder?.state);
       window.recordedVideoBase64 = "N/A";
     }
   } catch (error) {
@@ -285,7 +273,6 @@ window.stopScreenRecording = async () => {
 const createMeetingList = () => {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: "GET_MEETINGS" }, (response) => {
-      console.log("Meetings response:", response.meetings);
 
       const meetingsTemplate = response.meetings
         .map(
@@ -342,132 +329,56 @@ const createButton = (text, id, primary = false) => `
     </button>
 `;
 
-async function startRecording(meetingId, meetingTitle) {
-  try {
-    // Update UI to show recording state
-    if (recordButton) {
-      recordButton.textContent = "Setting up recording...";
-      recordButton.style.backgroundColor = "#fbbc04"; // Change to yellow
-    }
-
-    // Request a presigned URL for uploading to S3 from the background script
-    chrome.runtime.sendMessage(
-      { type: "GET_PRESIGNED_URL" },
-      async (response) => {
-        if (!response.success) {
-          console.error("Failed to get presigned URL", response);
-          recordingStatus.textContent = response.error;
-          resetUI();
-          return;
-        }
-        updateStatus("recording");
-        console.log("Presigned URL response:", response);
-
-        const presignedUrl = response.presignedUrl;
-
-        // Request screen and audio capture
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: "browser",
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 },
-            selfBrowserSurface: "include",
-          },
-          audio: true,
-          selfBrowserSurface: "include",
-        });
-
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 2,
-          },
-          video: false,
-        });
-
-        // Combine streams
-        const combinedStream = new MediaStream([
-          ...screenStream.getTracks(),
-          ...micStream.getTracks(),
-        ]);
-        recorder = new MediaRecorder(combinedStream);
-
-        // Create a writable stream to upload to S3
-        const uploadStream = new WritableStream({
-          write: async (chunk) => {
-            const response = await fetch(presignedUrl, {
-              method: "PUT",
-              body: chunk,
-              headers: {
-                "Content-Type": "video/mp4", // Adjust content type as necessary
-              },
-            });
-
-            if (!response.ok) {
-              throw new Error("Failed to upload chunk to S3");
-            }
-          },
-        });
-
-        const writer = uploadStream.getWriter();
-
-        recorder.ondataavailable = async (event) => {
-          if (event.data.size > 0) {
-            console.log("Data available, chunk size:", event.data.size);
-            await writer.write(event.data); // Stream the chunk to S3
-          }
-        };
-
-        recorder.start();
-        console.log("Recording started, recorder state:", recorder.state);
-      }
-    );
-  } catch (error) {
-    console.error("Error starting recording:", error);
-    alert("Failed to start recording. Please check permissions.");
-    resetUI(); // Call a function to reset the UI
+// Ensure updateStatus is defined before use
+const updateStatus = (status) => {
+  // Remove any existing status indicators
+  const existingStatus = minimizedPanel.querySelector(
+    ".recording-status, .processing-status"
+  );
+  if (existingStatus) {
+    existingStatus.remove();
   }
-}
 
-async function stopScreenRecording() {
-  try {
-    if (recorder && recorder.state === "recording") {
-      recorder.stop();
-      // Wait for data to be available
-      await new Promise((resolve) => (recorder.onstop = resolve));
-      const blob = new Blob(recordedChunks, { type: "video/mp4" });
-      // Handle the blob (e.g., upload or save)
-    }
-  } catch (error) {
-    console.error("Error stopping recording:", error);
-  } finally {
-    resetUI(); // Ensure UI is reset regardless of success or failure
+  // Reset any existing animations and styles
+  minimizedPanel.style.animation = "none";
+  minimizedPanel.style.borderColor = "";
+  minimizedPanel.style.boxShadow = "";
+
+  switch (status) {
+    case "recording":
+      // Apply recording styles
+      minimizedPanel.style.animation =
+        "recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite";
+      minimizedPanel.style.borderColor = "#ea4335";
+
+      const recordingDot = document.createElement("div");
+      recordingDot.className = "recording-status";
+      minimizedPanel.appendChild(recordingDot);
+      break;
+
+    case "processing":
+      // Apply processing styles
+      minimizedPanel.style.borderColor = "#fbbc04";
+
+      const processingDot = document.createElement("div");
+      processingDot.className = "processing-status";
+      minimizedPanel.appendChild(processingDot);
+      break;
+
+    default: // idle
+      // Reset to default styles
+      minimizedPanel.style.borderColor = "rgb(46, 196, 182)";
+      minimizedPanel.style.boxShadow = "0 4px 12px rgba(7, 59, 76, 0.12)";
+      break;
   }
-}
+};
 
-function resetUI() {
-  if (recordButton) {
-    isRecording = false;
-    recordButton.textContent = "Start Recording";
-    recordButton.style.backgroundColor = "#1a73e8"; // Reset to original color
-  }
-  // Reset any other UI elements as needed
-}
-
-// Move these variables and functions to the global scope (outside of floatingWindow)
-let loggedOutContent;
-let attachEventListeners;
-let updatePanelContent;
-
-// Declare these at the top level with let
-let showPanel;
-let hidePanel;
-let updatePosition;
+// Ensure minimizedPanel is defined in the global scope
+let minimizedPanel; // Declare minimizedPanel at the top level
 
 function floatingWindow() {
-  const minimizedPanel = document.createElement("div");
+  // Create the minimized panel
+  minimizedPanel = document.createElement("div");
   minimizedPanel.id = "noteMeetMinimizedPanel";
   minimizedPanel.style.cssText = `
     position: fixed;
@@ -525,7 +436,7 @@ function floatingWindow() {
     panel.style.pointerEvents = "auto";
     minimizedPanel.style.opacity = "0";
     minimizedPanel.style.pointerEvents = "none";
-    let isExpanded = true;
+    isExpanded = true;
     if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
@@ -537,7 +448,7 @@ function floatingWindow() {
     panel.style.pointerEvents = "none";
     minimizedPanel.style.opacity = "1";
     minimizedPanel.style.pointerEvents = "auto";
-    let isExpanded = false;
+    isExpanded = false;
     if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
@@ -593,50 +504,6 @@ function floatingWindow() {
     background-repeat: no-repeat;
   `;
   minimizedPanel.appendChild(statusIndicator);
-
-  // Update status indicator based on recording state
-  const updateStatus = (status) => {
-    // Remove any existing status indicators
-    const existingStatus = minimizedPanel.querySelector(
-      ".recording-status, .processing-status"
-    );
-    if (existingStatus) {
-      existingStatus.remove();
-    }
-
-    // Reset any existing animations and styles
-    minimizedPanel.style.animation = "none";
-    minimizedPanel.style.borderColor = "";
-    minimizedPanel.style.boxShadow = "";
-
-    switch (status) {
-      case "recording":
-        // Apply recording styles
-        minimizedPanel.style.animation =
-          "recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite";
-        minimizedPanel.style.borderColor = "#ea4335";
-
-        const recordingDot = document.createElement("div");
-        recordingDot.className = "recording-status";
-        minimizedPanel.appendChild(recordingDot);
-        break;
-
-      case "processing":
-        // Apply processing styles
-        minimizedPanel.style.borderColor = "#fbbc04";
-
-        const processingDot = document.createElement("div");
-        processingDot.className = "processing-status";
-        minimizedPanel.appendChild(processingDot);
-        break;
-
-      default: // idle
-        // Reset to default styles
-        minimizedPanel.style.borderColor = "rgb(46, 196, 182)";
-        minimizedPanel.style.boxShadow = "0 4px 12px rgba(7, 59, 76, 0.12)";
-        break;
-    }
-  };
 
   // Event listeners for panel interactions
   minimizedPanel.addEventListener("click", showPanel);
@@ -694,9 +561,7 @@ function floatingWindow() {
     startBtn?.addEventListener("click", startRecording);
     stopBtn?.addEventListener("click", () => window.stopScreenRecording());
     signOutBtn?.addEventListener("click", () => {
-      console.log("Sign out clicked");
       chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
-        console.log("Sign out response:", response);
         if (!response?.success) {
           console.error("Sign out failed:", response?.error);
         }
@@ -802,13 +667,13 @@ function floatingWindow() {
             .querySelector("#saveRecordingButton")
             ?.addEventListener("click", () => {
               try {
-                const blob = new Blob(recordedChunks, { type: "video/mp4" });
+                const blob = new Blob(recordedChunks, { type: "video/webm" });
                 const url = URL.createObjectURL(blob);
                 const downloadLink = document.createElement("a");
                 downloadLink.href = url;
                 downloadLink.download = `NoteMeet_Recording_${new Date()
                   .toISOString()
-                  .slice(0, 19)}.mp4`;
+                  .slice(0, 19)}.webm`;
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
@@ -827,7 +692,6 @@ function floatingWindow() {
 
     // Reattach sync status handler
     syncStatusBtn?.addEventListener("click", async () => {
-      console.log("Sync status clicked");
       syncStatusBtn.disabled = true;
       const originalText = syncStatusBtn.textContent;
       syncStatusBtn.textContent = "Checking sync status...";
@@ -1023,7 +887,7 @@ function floatingWindow() {
     panel.style.pointerEvents = "auto";
     minimizedPanel.style.opacity = "0";
     minimizedPanel.style.pointerEvents = "none";
-    let isExpanded = true;
+    isExpanded = true;
     if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
@@ -1035,7 +899,7 @@ function floatingWindow() {
     panel.style.pointerEvents = "none";
     minimizedPanel.style.opacity = "1";
     minimizedPanel.style.pointerEvents = "auto";
-    let isExpanded = false;
+    isExpanded = false;
     if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
@@ -1047,15 +911,19 @@ function floatingWindow() {
     transition: border-color 0.3s ease-in-out;
     will-change: transform, border-color, box-shadow;
   `;
+
+  // Ensure loading indicator is shown in minimizedPanel
+  const loadingIndicator = document.createElement("div");
+  loadingIndicator.className = "loading-indicator"; // Add a class for styling
+  loadingIndicator.textContent = "Loading..."; // Customize this
+  minimizedPanel.appendChild(loadingIndicator); // Append to minimizedPanel
 }
 
 floatingWindow();
 
 // Add this at the top level of your content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("Message received in content script:", message);
   if (message.type === "AUTH_STATE_CHANGED") {
-    console.log("Auth state changed:", message.user);
     handleAuthStateChange(message.user);
     sendResponse({ success: true });
     return true;
@@ -1065,7 +933,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Add this new function to handle auth state changes
 function handleAuthStateChange(user) {
   try {
-    console.log("Handling auth state change for user:", user);
     if (!panel) {
       console.error("Panel not initialized");
       return;
@@ -1073,16 +940,164 @@ function handleAuthStateChange(user) {
 
     if (!user) {
       // User is signed out
-      console.log("User signed out, showing login panel");
       panel.innerHTML = loggedOutContent;
       const signInBtn = panel.querySelector("#signInButton");
       signInBtn?.addEventListener("click", handleAuth);
     } else {
       // User is signed in
-      console.log("User signed in, updating panel content");
       updatePanelContent(user);
     }
   } catch (error) {
     console.error("Error handling auth state change:", error);
+  }
+}
+
+// Ensure resetUI is defined
+function resetUI() {
+  if (recordButton) {
+    recordButton.textContent = "Start Recording"; // Reset button text
+    recordButton.style.backgroundColor = "#1a73e8"; // Reset button color
+    recordButton.disabled = false; // Re-enable the button
+  }
+
+  // Hide loading indicator if it exists
+  const loadingIndicator = minimizedPanel.querySelector(".loading-indicator");
+  if (loadingIndicator) {
+    loadingIndicator.style.display = "none"; // Hide loading indicator
+  }
+
+  // Reset any other UI elements as needed
+}
+
+// Update the startRecording function
+async function startRecording(meetingId, meetingTitle) {
+  try {
+    // Update UI to show loading state
+    if (recordButton) {
+      recordButton.textContent = "Setting up recording...";
+      recordButton.style.backgroundColor = "#fbbc04"; // Change to yellow
+      recordButton.disabled = true; // Disable the button to prevent multiple clicks
+    }
+
+    // Show loading indicator in minimizedPanel
+    const loadingIndicator = minimizedPanel.querySelector(".loading-indicator");
+    if (loadingIndicator) {
+      loadingIndicator.style.display = "block"; // Show loading indicator
+    }
+
+    // Request a presigned URL for uploading to S3 from the background script
+    chrome.runtime.sendMessage(
+      { type: "GET_PRESIGNED_URL" },
+      async (response) => {
+        if (!response.success) {
+          console.error("Failed to get presigned URL", response);
+          recordingStatus.textContent = response.error;
+          resetUI();
+          return;
+        }
+        updateStatus("recording"); // Call updateStatus here
+
+        // Request screen and audio capture
+        try {
+          // Get system audio and screen
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: "browser",
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 },
+              selfBrowserSurface: "include",
+            },
+            audio: true,
+            selfBrowserSurface: "include",
+          });
+
+          // Get microphone audio
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 2,
+            },
+            video: false,
+          });
+
+          // Create AudioContext and destination first
+          audioContext = new AudioContext();
+          const audioDest = audioContext.createMediaStreamDestination();
+
+          // Then create and connect sources
+          if (screenStream.getAudioTracks().length > 0) {
+            const screenAudioSource =
+              audioContext.createMediaStreamSource(screenStream);
+            screenAudioSource.connect(audioDest);
+          }
+
+          if (micStream.getAudioTracks().length > 0) {
+            const micAudioSource =
+              audioContext.createMediaStreamSource(micStream);
+            micAudioSource.connect(audioDest);
+          }
+
+          // Get audio from DOM elements (meeting participants)
+          const audioElements = Array.from(
+            document.querySelectorAll("audio, video")
+          );
+          audioElements.forEach((element) => {
+            if (
+              element.srcObject &&
+              element.srcObject.getAudioTracks().length > 0
+            ) {
+              const source = audioContext.createMediaStreamSource(
+                element.srcObject
+              );
+              source.connect(audioDest);
+            }
+          });
+
+          // Combine screen video and all audio
+          const combinedStream = new MediaStream([
+            ...screenStream.getVideoTracks(),
+            ...audioDest.stream.getAudioTracks(),
+          ]);
+
+          // Create the MediaRecorder instance and store it in the global variable
+          recorder = new MediaRecorder(combinedStream, {
+            mimeType: "video/webm; codecs=vp8,opus",
+            audioBitsPerSecond: 128000,
+          });
+
+          // Initialize recordedChunks
+          recordedChunks = [];
+
+          // Capture data available event
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunks.push(event.data);
+            }
+          };
+
+          // Start recording
+          recorder.start();
+
+          // Remove loading indicator after starting the recording
+          if (loadingIndicator) {
+            loadingIndicator.style.display = "none"; // Hide loading indicator
+          }
+          recordButton.textContent = "Stop Recording"; // Update button text
+          recordButton.disabled = false; // Re-enable the button
+        } catch (error) {
+          console.error("Error capturing media:", error);
+          resetUI();
+          if (loadingIndicator) {
+            loadingIndicator.style.display = "none"; // Remove loading indicator on error
+          }
+        }
+      }
+    );
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    alert("Failed to start recording. Please check permissions.");
+    resetUI(); // Call a function to reset the UI
   }
 }
