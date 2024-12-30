@@ -742,7 +742,7 @@ function floatingWindow() {
       } catch (error) {
         console.error("Error showing sync status:", error);
         syncStatusBtn.disabled = false;
-        syncStatusBtn.textContent = originalText;
+        syncStatusBtn.textContent = originalText + " (Error)";
       }
     });
   };
@@ -969,8 +969,17 @@ function resetUI() {
   // Reset any other UI elements as needed
 }
 
-// Update the startRecording function
+// Declare the flag at the top level
+var isRecordingSetupInProgress = false; // Flag to track recording setup
+
 async function startRecording(meetingId, meetingTitle) {
+  if (isRecordingSetupInProgress) {
+    console.warn("Recording setup is already in progress.");
+    return; // Prevent multiple executions
+  }
+
+  isRecordingSetupInProgress = true; // Set the flag to true
+
   try {
     // Update UI to show loading state
     if (recordButton) {
@@ -986,118 +995,79 @@ async function startRecording(meetingId, meetingTitle) {
     }
 
     // Request a presigned URL for uploading to S3 from the background script
-    chrome.runtime.sendMessage(
-      { type: "GET_PRESIGNED_URL" },
-      async (response) => {
-        if (!response.success) {
-          console.error("Failed to get presigned URL", response);
-          recordingStatus.textContent = response.error;
-          resetUI();
-          return;
+    chrome.runtime.sendMessage({ type: "GET_PRESIGNED_URL" }, async (response) => {
+      // Ensure response is defined before using it
+      if (!response || !response.success) {
+        console.error("Failed to get presigned URL", response);
+        if (recordingStatus) {
+          recordingStatus.textContent = response ? response.error : "Unknown error"; // Set error message
+          recordingStatus.style.display = "block"; // Show error message
         }
-        updateStatus("recording"); // Call updateStatus here
-
-        // Request screen and audio capture
-        try {
-          // Get system audio and screen
-          screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              displaySurface: "browser",
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 },
-              selfBrowserSurface: "include",
-            },
-            audio: true,
-            selfBrowserSurface: "include",
-          });
-
-          // Get microphone audio
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 2,
-            },
-            video: false,
-          });
-
-          // Create AudioContext and destination first
-          audioContext = new AudioContext();
-          const audioDest = audioContext.createMediaStreamDestination();
-
-          // Then create and connect sources
-          if (screenStream.getAudioTracks().length > 0) {
-            const screenAudioSource =
-              audioContext.createMediaStreamSource(screenStream);
-            screenAudioSource.connect(audioDest);
-          }
-
-          if (micStream.getAudioTracks().length > 0) {
-            const micAudioSource =
-              audioContext.createMediaStreamSource(micStream);
-            micAudioSource.connect(audioDest);
-          }
-
-          // Get audio from DOM elements (meeting participants)
-          const audioElements = Array.from(
-            document.querySelectorAll("audio, video")
-          );
-          audioElements.forEach((element) => {
-            if (
-              element.srcObject &&
-              element.srcObject.getAudioTracks().length > 0
-            ) {
-              const source = audioContext.createMediaStreamSource(
-                element.srcObject
-              );
-              source.connect(audioDest);
-            }
-          });
-
-          // Combine screen video and all audio
-          const combinedStream = new MediaStream([
-            ...screenStream.getVideoTracks(),
-            ...audioDest.stream.getAudioTracks(),
-          ]);
-
-          // Create the MediaRecorder instance and store it in the global variable
-          recorder = new MediaRecorder(combinedStream, {
-            mimeType: "video/webm; codecs=vp8,opus",
-            audioBitsPerSecond: 128000,
-          });
-
-          // Initialize recordedChunks
-          recordedChunks = [];
-
-          // Capture data available event
-          recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordedChunks.push(event.data);
-            }
-          };
-
-          // Start recording
-          recorder.start();
-
-          // Remove loading indicator after starting the recording
-          if (loadingIndicator) {
-            loadingIndicator.style.display = "none"; // Hide loading indicator
-          }
-          recordButton.textContent = "Stop Recording"; // Update button text
-          recordButton.disabled = false; // Re-enable the button
-        } catch (error) {
-          console.error("Error capturing media:", error);
-          resetUI();
-          if (loadingIndicator) {
-            loadingIndicator.style.display = "none"; // Remove loading indicator on error
-          }
-        }
+        resetUI();
+        isRecordingSetupInProgress = false; // Reset the flag
+        return;
       }
-    );
+
+      updateStatus("recording"); // Call updateStatus here
+
+      // Request screen and audio capture
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+
+        // Combine streams
+        const combinedStream = new MediaStream([
+          ...screenStream.getTracks(),
+          ...micStream.getTracks(),
+        ]);
+        recorder = new MediaRecorder(combinedStream);
+
+        // Initialize recordedChunks
+        recordedChunks = [];
+
+        // Capture data available event
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+
+        // Start recording
+        recorder.start();
+
+        // Remove loading indicator after starting the recording
+        if (loadingIndicator) {
+          loadingIndicator.style.display = "none"; // Hide loading indicator
+        }
+        recordButton.textContent = "Stop Recording"; // Update button text
+        recordButton.disabled = false; // Re-enable the button
+
+        // Show recording status
+        if (recordingStatus) {
+          recordingStatus.textContent = "Recording..."; // Set recording status
+          recordingStatus.style.display = "block"; // Show recording status
+        }
+      } catch (error) {
+        console.error("Error capturing media:", error);
+        resetUI();
+        if (loadingIndicator) {
+          loadingIndicator.style.display = "none"; // Remove loading indicator on error
+        }
+      } finally {
+        isRecordingSetupInProgress = false; // Reset the flag after completion
+      }
+    });
   } catch (error) {
     console.error("Error starting recording:", error);
     alert("Failed to start recording. Please check permissions.");
     resetUI(); // Call a function to reset the UI
+    isRecordingSetupInProgress = false; // Reset the flag
   }
 }
