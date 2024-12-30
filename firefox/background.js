@@ -99,7 +99,38 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
+
+  if (message.type === "GET_PRESIGNED_URL") {
+    getPresignedUrl()
+      .then(response => sendResponse(response)) 
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
+
+
+async function getPresignedUrl() {
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/meetings/upload/presigned-url`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get presigned URL');
+    }
+
+    return response.json();
+
+  } catch (error) {
+    console.error('Error fetching presigned URL:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 async function handleLogin({ email, password }) {
   try {

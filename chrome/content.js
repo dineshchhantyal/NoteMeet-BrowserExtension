@@ -7,7 +7,7 @@ const AUTH_BASE_URL = "https://notemeet.dineshchhantyal.com";
 
 // Add at the top of the file, after the AUTH_BASE_URL declaration
 let panel; // Declare panel as a global variable
-const LOGO_URL = chrome.runtime.getURL('icons/icon.png');
+const LOGO_URL = chrome.runtime.getURL("icons/icon.png");
 
 // Add this helper function at the top level
 const createHeader = () => `
@@ -102,7 +102,7 @@ async function handleAuth() {
     buttonText.textContent = "Signing in...";
 
     try {
-      // Send message to background script to handle the authentication 
+      // Send message to background script to handle the authentication
       const message = {
         type: "LOGIN",
         data: {
@@ -119,7 +119,7 @@ async function handleAuth() {
           const errorDiv = document.getElementById("loginError");
           errorDiv.textContent = response.error || "Login failed";
           errorDiv.style.display = "block";
-          
+
           // Reset button state on error
           submitButton.disabled = false;
           spinner.style.display = "none";
@@ -140,29 +140,6 @@ async function handleAuth() {
   });
 }
 
-// Function to upload recording
-function uploadToNoteMeet(blob) {
-  const token = localStorage.getItem("noteMeetToken");
-  if (!token) {
-    console.error("No auth token found");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("file", blob);
-
-  fetch("https://notemeet.dineshchhantyal.com/upload", {
-    method: "POST",
-    body: formData,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then((response) => response.json())
-    .then((data) => console.log("Recording uploaded:", data))
-    .catch((error) => console.error("Upload failed:", error));
-}
-
 // Add these variables at the top level
 window.recordedVideoBase64 = null;
 let mediaRecorder = null;
@@ -180,7 +157,7 @@ let isRecording = false;
 let recordButton = null;
 
 // Add styles to document head
-const style = document.createElement('style');
+const style = document.createElement("style");
 style.textContent = `
   @keyframes recording-pulse {
     0% {
@@ -238,70 +215,71 @@ document.head.appendChild(style);
 
 // Define stopScreenRecording in global scope
 window.stopScreenRecording = async () => {
-    console.log('Stopping recording...');
-    try {
-        // Update UI immediately when stopping
-        const recordButton = document.querySelector("#startRecordingButton");
-        if (recordButton) {
-            recordButton.textContent = "New Recording";
-            recordButton.style.backgroundColor = "#1a73e8";
-            isRecording = false;
-        }
-
-        if (recorder && recorder.state === 'recording') {
-            console.log('Recorder state:', recorder.state);
-            
-            // Create the stop recording promise before stopping
-            stopRecordingPromise = new Promise((resolve) => {
-                recorder.onstop = () => {
-                    console.log('Recording stopped');
-                    resolve();
-                };
-            });
-            
-            // Stop the recording
-            recorder.stop();
-            
-            // Wait for the recording to stop
-            await stopRecordingPromise;
-            console.log('Stop promise resolved');
-            
-            const recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-            console.log('Blob created:', recordedBlob.size, 'bytes');
-
-            // Convert to Base64
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                window.recordedVideoBase64 = reader.result;
-                console.log('Base64 conversion complete');
-            };
-            reader.readAsDataURL(recordedBlob);
-
-            // Cleanup resources
-            if (screenStream) {
-                screenStream.getTracks().forEach(track => {
-                    track.stop();
-                    console.log('Screen track stopped');
-                });
-            }
-            if (micStream) {
-                micStream.getTracks().forEach(track => {
-                    track.stop();
-                    console.log('Mic track stopped');
-                });
-            }
-            if (audioContext) {
-                await audioContext.close();
-                console.log('Audio context closed');
-            }
-            
-            console.log('Cleanup complete');
-        } else {
-            console.log('Recorder not active:', recorder?.state);
-        }
-    } catch (error) {
-        console.error('Error stopping recording:', error);
+  console.log("Stopping recording...");
+  try {
+    // Update UI immediately when stopping
+    const recordButton = document.querySelector("#startRecordingButton");
+    if (recordButton) {
+      recordButton.textContent = "New Recording";
+      recordButton.style.backgroundColor = "#1a73e8";
+      isRecording = false;
     }
+
+    if (recorder && recorder.state === "recording") {
+      console.log("Recorder state:", recorder.state);
+
+      // Create the stop recording promise before stopping
+      stopRecordingPromise = new Promise((resolve) => {
+        recorder.onstop = () => {
+          console.log("Recording stopped");
+          resolve();
+        };
+      });
+
+      // Stop the recording
+      recorder.stop();
+
+      // Wait for the recording to stop
+      await stopRecordingPromise;
+      console.log("Stop promise resolved");
+
+      const recordedBlob = new Blob(recordedChunks, { type: "video/mp4" });
+      console.log("Blob created:", recordedBlob.size, "bytes");
+
+      // Convert to Base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        window.recordedVideoBase64 = reader.result;
+        console.log("Base64 conversion complete");
+      };
+      reader.readAsDataURL(recordedBlob);
+
+      // Cleanup resources
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => {
+          track.stop();
+          console.log("Screen track stopped");
+        });
+      }
+      if (micStream) {
+        micStream.getTracks().forEach((track) => {
+          track.stop();
+          console.log("Mic track stopped");
+        });
+      }
+      if (audioContext) {
+        await audioContext.close();
+        console.log("Audio context closed");
+      }
+
+      console.log("Cleanup complete");
+    } else {
+      console.log("Recorder not active:", recorder?.state);
+      window.recordedVideoBase64 = "N/A";
+    }
+  } catch (error) {
+    console.error("Error stopping recording:", error);
+  }
 };
 
 const createMeetingList = () => {
@@ -309,7 +287,9 @@ const createMeetingList = () => {
     chrome.runtime.sendMessage({ type: "GET_MEETINGS" }, (response) => {
       console.log("Meetings response:", response.meetings);
 
-      const meetingsTemplate = response.meetings.map(meeting => `
+      const meetingsTemplate = response.meetings
+        .map(
+          (meeting) => `
         <div class="meeting-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; background-color: #f9f9f9;">
           <div class="meeting-info" style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
             <span class="meeting-title" style="font-weight: bold; color: rgb(7, 59, 76);">${meeting.title}</span>
@@ -332,7 +312,9 @@ const createMeetingList = () => {
             <span class="recording-indicator" id="recordingIndicator_${meeting.id}" style="display: none; margin-left: 10px; color: rgb(234, 67, 53);">Recording...</span>
           </div>
         </div>
-      `).join('');
+      `
+        )
+        .join("");
       resolve(meetingsTemplate);
     });
   });
@@ -361,77 +343,117 @@ const createButton = (text, id, primary = false) => `
 `;
 
 async function startRecording(meetingId, meetingTitle) {
-    try {
-        // Update UI to show recording state
-        if (recordButton) {
-            isRecording = true;
-            recordButton.textContent = "Stop Recording";
-            recordButton.style.backgroundColor = "#ea4335"; // Change to red
+  try {
+    // Update UI to show recording state
+    if (recordButton) {
+      recordButton.textContent = "Setting up recording...";
+      recordButton.style.backgroundColor = "#fbbc04"; // Change to yellow
+    }
+
+    // Request a presigned URL for uploading to S3 from the background script
+    chrome.runtime.sendMessage(
+      { type: "GET_PRESIGNED_URL" },
+      async (response) => {
+        if (!response.success) {
+          console.error("Failed to get presigned URL", response);
+          recordingStatus.textContent = response.error;
+          resetUI();
+          return;
         }
+        updateStatus("recording");
+        console.log("Presigned URL response:", response);
+
+        const presignedUrl = response.presignedUrl;
 
         // Request screen and audio capture
         screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
-              displaySurface: "browser",
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 },
-              selfBrowserSurface: "include"
+            displaySurface: "browser",
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            selfBrowserSurface: "include",
           },
           audio: true,
-          selfBrowserSurface: "include"
-      });
+          selfBrowserSurface: "include",
+        });
 
-      // Get microphone audio
-      micStream = await navigator.mediaDevices.getUserMedia({
+        micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 2
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 2,
           },
           video: false,
-      });
+        });
 
-        // Combine streams and start recording
-        const combinedStream = new MediaStream([...screenStream.getTracks(), ...micStream.getTracks()]);
+        // Combine streams
+        const combinedStream = new MediaStream([
+          ...screenStream.getTracks(),
+          ...micStream.getTracks(),
+        ]);
         recorder = new MediaRecorder(combinedStream);
-        recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                recordedChunks.push(event.data);
-            }
-        };
-        recorder.start();
 
-    } catch (error) {
-        console.error('Error starting recording:', error);
-        alert("Failed to start recording. Please check permissions.");
-        resetUI(); // Call a function to reset the UI
-    }
+        // Create a writable stream to upload to S3
+        const uploadStream = new WritableStream({
+          write: async (chunk) => {
+            const response = await fetch(presignedUrl, {
+              method: "PUT",
+              body: chunk,
+              headers: {
+                "Content-Type": "video/mp4", // Adjust content type as necessary
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error("Failed to upload chunk to S3");
+            }
+          },
+        });
+
+        const writer = uploadStream.getWriter();
+
+        recorder.ondataavailable = async (event) => {
+          if (event.data.size > 0) {
+            console.log("Data available, chunk size:", event.data.size);
+            await writer.write(event.data); // Stream the chunk to S3
+          }
+        };
+
+        recorder.start();
+        console.log("Recording started, recorder state:", recorder.state);
+      }
+    );
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    alert("Failed to start recording. Please check permissions.");
+    resetUI(); // Call a function to reset the UI
+  }
 }
 
 async function stopScreenRecording() {
-    try {
-        if (recorder && recorder.state === 'recording') {
-            recorder.stop();
-            // Wait for data to be available
-            await new Promise(resolve => recorder.onstop = resolve);
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            // Handle the blob (e.g., upload or save)
-        }
-    } catch (error) {
-        console.error('Error stopping recording:', error);
-    } finally {
-        resetUI(); // Ensure UI is reset regardless of success or failure
+  try {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      // Wait for data to be available
+      await new Promise((resolve) => (recorder.onstop = resolve));
+      const blob = new Blob(recordedChunks, { type: "video/mp4" });
+      // Handle the blob (e.g., upload or save)
     }
+  } catch (error) {
+    console.error("Error stopping recording:", error);
+  } finally {
+    resetUI(); // Ensure UI is reset regardless of success or failure
+  }
 }
 
 function resetUI() {
-    if (recordButton) {
-        isRecording = false;
-        recordButton.textContent = "Start Recording";
-        recordButton.style.backgroundColor = "#1a73e8"; // Reset to original color
-    }
-    // Reset any other UI elements as needed
+  if (recordButton) {
+    isRecording = false;
+    recordButton.textContent = "Start Recording";
+    recordButton.style.backgroundColor = "#1a73e8"; // Reset to original color
+  }
+  // Reset any other UI elements as needed
 }
 
 // Move these variables and functions to the global scope (outside of floatingWindow)
@@ -503,8 +525,8 @@ function floatingWindow() {
     panel.style.pointerEvents = "auto";
     minimizedPanel.style.opacity = "0";
     minimizedPanel.style.pointerEvents = "none";
-    isExpanded = true;
-    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+    let isExpanded = true;
+    if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
   };
@@ -515,8 +537,8 @@ function floatingWindow() {
     panel.style.pointerEvents = "none";
     minimizedPanel.style.opacity = "1";
     minimizedPanel.style.pointerEvents = "auto";
-    isExpanded = false;
-    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+    let isExpanded = false;
+    if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
   };
@@ -575,47 +597,50 @@ function floatingWindow() {
   // Update status indicator based on recording state
   const updateStatus = (status) => {
     // Remove any existing status indicators
-    const existingStatus = minimizedPanel.querySelector('.recording-status, .processing-status');
+    const existingStatus = minimizedPanel.querySelector(
+      ".recording-status, .processing-status"
+    );
     if (existingStatus) {
-        existingStatus.remove();
+      existingStatus.remove();
     }
 
     // Reset any existing animations and styles
-    minimizedPanel.style.animation = 'none';
-    minimizedPanel.style.borderColor = '';
-    minimizedPanel.style.boxShadow = '';
+    minimizedPanel.style.animation = "none";
+    minimizedPanel.style.borderColor = "";
+    minimizedPanel.style.boxShadow = "";
 
-    switch(status) {
-        case 'recording':
-            // Apply recording styles
-            minimizedPanel.style.animation = 'recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite';
-            minimizedPanel.style.borderColor = '#ea4335';
-            
-            const recordingDot = document.createElement('div');
-            recordingDot.className = 'recording-status';
-            minimizedPanel.appendChild(recordingDot);
-            break;
+    switch (status) {
+      case "recording":
+        // Apply recording styles
+        minimizedPanel.style.animation =
+          "recording-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite";
+        minimizedPanel.style.borderColor = "#ea4335";
 
-        case 'processing':
-            // Apply processing styles
-            minimizedPanel.style.borderColor = '#fbbc04';
-            
-            const processingDot = document.createElement('div');
-            processingDot.className = 'processing-status';
-            minimizedPanel.appendChild(processingDot);
-            break;
+        const recordingDot = document.createElement("div");
+        recordingDot.className = "recording-status";
+        minimizedPanel.appendChild(recordingDot);
+        break;
 
-        default: // idle
-            // Reset to default styles
-            minimizedPanel.style.borderColor = 'rgb(46, 196, 182)';
-            minimizedPanel.style.boxShadow = '0 4px 12px rgba(7, 59, 76, 0.12)';
-            break;
+      case "processing":
+        // Apply processing styles
+        minimizedPanel.style.borderColor = "#fbbc04";
+
+        const processingDot = document.createElement("div");
+        processingDot.className = "processing-status";
+        minimizedPanel.appendChild(processingDot);
+        break;
+
+      default: // idle
+        // Reset to default styles
+        minimizedPanel.style.borderColor = "rgb(46, 196, 182)";
+        minimizedPanel.style.boxShadow = "0 4px 12px rgba(7, 59, 76, 0.12)";
+        break;
     }
   };
 
   // Event listeners for panel interactions
   minimizedPanel.addEventListener("click", showPanel);
-  
+
   panel.addEventListener("mouseleave", () => {
     timeoutId = setTimeout(hidePanel, 1000);
   });
@@ -630,17 +655,16 @@ function floatingWindow() {
 
   // Update the startRecording function to handle status
   const originalStartRecording = startRecording;
-  window.startRecording = async function() {
-    updateStatus('recording');
+  window.startRecording = async function () {
     await originalStartRecording();
   };
 
   // Update stopScreenRecording to handle status
   const originalStopScreenRecording = window.stopScreenRecording;
-  window.stopScreenRecording = async function() {
-    updateStatus('processing');
+  window.stopScreenRecording = async function () {
+    updateStatus("processing");
     await originalStopScreenRecording();
-    updateStatus('idle');
+    updateStatus("idle");
   };
 
   // Different panel content based on login state
@@ -662,7 +686,7 @@ function floatingWindow() {
     </div>
   `;
 
-  attachEventListeners = function() {
+  attachEventListeners = function () {
     const startBtn = panel.querySelector("button:nth-of-type(1)");
     const stopBtn = panel.querySelector("button:nth-of-type(2)");
     const signOutBtn = panel.querySelector("button:nth-of-type(3)");
@@ -670,30 +694,36 @@ function floatingWindow() {
     startBtn?.addEventListener("click", startRecording);
     stopBtn?.addEventListener("click", () => window.stopScreenRecording());
     signOutBtn?.addEventListener("click", () => {
-        console.log("Sign out clicked");
-        chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
-            console.log("Sign out response:", response);
-            if (!response?.success) {
-                console.error("Sign out failed:", response?.error);
-            }
-        });
+      console.log("Sign out clicked");
+      chrome.runtime.sendMessage({ type: "SIGN_OUT" }, (response) => {
+        console.log("Sign out response:", response);
+        if (!response?.success) {
+          console.error("Sign out failed:", response?.error);
+        }
+      });
     });
   };
 
-  updatePanelContent = function(user) {
+  updatePanelContent = function (user) {
     const loggedInContent = `
       <div style="text-align: center;">
         ${createHeader()}
         <div style="display: flex; align-items: center; margin-bottom: 16px;">
           <div style="text-align: left;">
-            <div style="font-weight: 500; color: rgb(7, 59, 76);">${user.name}</div>
+            <div style="font-weight: 500; color: rgb(7, 59, 76);">${
+              user.name
+            }</div>
             <div style="font-size: 12px; color: #666;">${user.email}</div>
           </div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Recordings left this month</div>
-          <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.recordingsLeft ?? 1}</div>
-          <div style="font-size: 12px; color: #666;">${user.plan ?? "Free"}</div>
+          <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${
+            user.recordingsLeft ?? 1
+          }</div>
+          <div style="font-size: 12px; color: #666;">${
+            user.plan ?? "Free"
+          }</div>
         </div>
         <div id="recordingControls">
           ${createButton("Start Recording", "startRecordingButton", true)}
@@ -704,88 +734,108 @@ function floatingWindow() {
       </div>
     `;
     panel.innerHTML = loggedInContent;
-    
+
     // Reattach event listeners (removed sign out related code)
     const startBtn = panel.querySelector("#startRecordingButton");
     const syncStatusBtn = panel.querySelector("#syncStatusButton");
 
     // Attach start recording handler
     startBtn?.addEventListener("click", async () => {
-        startBtn.disabled = true;
-        startBtn.textContent = "Starting...";
-        try {
-            await startRecording();
-            const controlsDiv = panel.querySelector("#recordingControls");
-            controlsDiv.innerHTML = `
+      if (startBtn.disabled) {
+        return;
+      }
+      startBtn.disabled = true;
+      startBtn.textContent = "Starting...";
+      try {
+        await startRecording();
+        const controlsDiv = panel.querySelector("#recordingControls");
+        controlsDiv.innerHTML = `
                 ${createButton("Stop Recording", "stopRecordingButton")}
-                <div style="font-size: 12px; color: #666; margin-top: 8px;">Recording in progress...</div>
+                <div id="recordingStatus" style="font-size: 12px; color: #666; margin-top: 8px;">Recording in progress...</div>
             `;
-            
-            // Reattach stop recording handler
-            const stopBtn = panel.querySelector("#stopRecordingButton");
-            stopBtn?.addEventListener("click", async () => {
-                stopBtn.disabled = true;
-                stopBtn.textContent = "Processing...";
-                await window.stopScreenRecording();
-                
-                // Wait for Base64 conversion
-                const waitForBase64 = new Promise((resolve) => {
-                    const checkInterval = setInterval(() => {
-                        if (window.recordedVideoBase64) {
-                            clearInterval(checkInterval);
-                            resolve();
-                        }
-                    }, 100);
-                });
 
-                await waitForBase64;
+        // Reattach stop recording handler
+        const stopBtn = panel.querySelector("#stopRecordingButton");
+        stopBtn?.addEventListener("click", async () => {
+          stopBtn.disabled = true;
+          stopBtn.textContent = "Processing...";
+          await window.stopScreenRecording();
 
-                // Update controls and reattach handlers
-                controlsDiv.innerHTML = `
-                    ${createButton("Start New Recording", "startRecordingButton", true)}
-                    ${createButton("Save Recording Locally", "saveRecordingButton")}
+          // Wait for Base64 conversion
+          const waitForBase64 = new Promise((resolve) => {
+            const checkInterval = setInterval(() => {
+              if (window.recordedVideoBase64) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 100);
+          });
+
+          await waitForBase64;
+
+          if (waitForBase64 === "N/A") {
+            return;
+          }
+
+          // Update controls and reattach handlers
+          controlsDiv.innerHTML = `
+                    ${createButton(
+                      "Start New Recording",
+                      "startRecordingButton",
+                      true
+                    )}
+                    ${createButton(
+                      "Save Recording Locally",
+                      "saveRecordingButton"
+                    )}
                 `;
-                
-                // Reattach new recording button handler
-                panel.querySelector("#startRecordingButton")?.addEventListener("click", () => {
-                    updatePanelContent(user); // Reset to initial state
-                });
 
-                // Attach save recording handler
-                panel.querySelector("#saveRecordingButton")?.addEventListener("click", () => {
-                    try {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                        const url = URL.createObjectURL(blob);
-                        const downloadLink = document.createElement("a");
-                        downloadLink.href = url;
-                        downloadLink.download = `NoteMeet_Recording_${new Date().toISOString().slice(0,19)}.webm`;
-                        document.body.appendChild(downloadLink);
-                        downloadLink.click();
-                        document.body.removeChild(downloadLink);
-                        URL.revokeObjectURL(url);
-                    } catch (error) {
-                        console.error('Error downloading recording:', error);
-                    }
-                });
+          // Reattach new recording button handler
+          panel
+            .querySelector("#startRecordingButton")
+            ?.addEventListener("click", () => {
+              updatePanelContent(user); // Reset to initial state
             });
-        } catch (error) {
-            console.error('Error starting recording:', error);
-            startBtn.disabled = false;
-            startBtn.textContent = "Start Recording";
-        }
+
+          // Attach save recording handler
+          panel
+            .querySelector("#saveRecordingButton")
+            ?.addEventListener("click", () => {
+              try {
+                const blob = new Blob(recordedChunks, { type: "video/mp4" });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement("a");
+                downloadLink.href = url;
+                downloadLink.download = `NoteMeet_Recording_${new Date()
+                  .toISOString()
+                  .slice(0, 19)}.mp4`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(url);
+              } catch (error) {
+                console.error("Error downloading recording:", error);
+              }
+            });
+        });
+      } catch (error) {
+        console.error("Error starting recording:", error);
+        startBtn.disabled = false;
+        startBtn.textContent = "Start Recording";
+      }
     });
 
     // Reattach sync status handler
     syncStatusBtn?.addEventListener("click", async () => {
-        console.log("Sync status clicked");
-        syncStatusBtn.disabled = true;
-        const originalText = syncStatusBtn.textContent;
-        syncStatusBtn.textContent = "Checking sync status...";
-        
-        try {
-            // Show sync confirmation dialog
-            const syncDialog = document.createElement('div');
-            syncDialog.style.cssText = `
+      console.log("Sync status clicked");
+      syncStatusBtn.disabled = true;
+      const originalText = syncStatusBtn.textContent;
+      syncStatusBtn.textContent = "Checking sync status...";
+
+      try {
+        // Show sync confirmation dialog
+        const syncDialog = document.createElement("div");
+        syncDialog.style.cssText = `
                 position: fixed;
                 top: 50%;
                 left: 50%;
@@ -798,8 +848,8 @@ function floatingWindow() {
                 max-width: 400px;
                 text-align: center;
             `;
-            
-            syncDialog.innerHTML = `
+
+        syncDialog.innerHTML = `
                 <h3 style="margin: 0 0 15px 0; color: #1a73e8;">✓ All Set!</h3>
                 <p style="margin: 0 0 15px 0; color: #5f6368;">
                     Your notes and recordings are synced with NoteMeet.
@@ -816,21 +866,20 @@ function floatingWindow() {
                 ">Got it</button>
             `;
 
-            document.body.appendChild(syncDialog);
+        document.body.appendChild(syncDialog);
 
-            // Handle close button
-            const closeBtn = syncDialog.querySelector('button');
-            closeBtn.onclick = () => {
-                document.body.removeChild(syncDialog);
-                syncStatusBtn.disabled = false;
-                syncStatusBtn.textContent = originalText;
-            };
-
-        } catch (error) {
-            console.error("Error showing sync status:", error);
-            syncStatusBtn.disabled = false;
-            syncStatusBtn.textContent = originalText;
-        }
+        // Handle close button
+        const closeBtn = syncDialog.querySelector("button");
+        closeBtn.onclick = () => {
+          document.body.removeChild(syncDialog);
+          syncStatusBtn.disabled = false;
+          syncStatusBtn.textContent = originalText;
+        };
+      } catch (error) {
+        console.error("Error showing sync status:", error);
+        syncStatusBtn.disabled = false;
+        syncStatusBtn.textContent = originalText;
+      }
     });
   };
 
@@ -889,8 +938,16 @@ function floatingWindow() {
       const panelHeight = panel.offsetHeight;
       const minPanelWidth = 48; // Size of minimized panel
 
-      currentX = Math.min(Math.max(currentX, 0), viewportWidth - (panel.style.visibility === 'visible' ? panelWidth : minPanelWidth));
-      currentY = Math.min(Math.max(currentY, 0), viewportHeight - (panel.style.visibility === 'visible' ? panelHeight : minPanelWidth));
+      currentX = Math.min(
+        Math.max(currentX, 0),
+        viewportWidth -
+          (panel.style.visibility === "visible" ? panelWidth : minPanelWidth)
+      );
+      currentY = Math.min(
+        Math.max(currentY, 0),
+        viewportHeight -
+          (panel.style.visibility === "visible" ? panelHeight : minPanelWidth)
+      );
 
       xOffset = currentX;
       yOffset = currentY;
@@ -912,65 +969,74 @@ function floatingWindow() {
     const panelHeight = panel.offsetHeight;
     const minPanelSize = 48;
 
-    const constrainedX = Math.min(Math.max(x, 0), viewportWidth - (panel.style.visibility === 'visible' ? panelWidth : minPanelSize));
-    const constrainedY = Math.min(Math.max(y, 0), viewportHeight - (panel.style.visibility === 'visible' ? panelHeight : minPanelSize));
+    const constrainedX = Math.min(
+      Math.max(x, 0),
+      viewportWidth -
+        (panel.style.visibility === "visible" ? panelWidth : minPanelSize)
+    );
+    const constrainedY = Math.min(
+      Math.max(y, 0),
+      viewportHeight -
+        (panel.style.visibility === "visible" ? panelHeight : minPanelSize)
+    );
 
     const translate = `translate3d(${constrainedX}px, ${constrainedY}px, 0)`;
-    
-    minimizedPanel.style.transform = isExpanded 
-      ? `${translate} scale(0.8)` 
+
+    minimizedPanel.style.transform = isExpanded
+      ? `${translate} scale(0.8)`
       : translate;
-    
-    panel.style.transform = panel.style.visibility === 'visible'
-      ? `${translate} scale(1)`
-      : `${translate} translateY(-10px) scale(0.95)`;
+
+    panel.style.transform =
+      panel.style.visibility === "visible"
+        ? `${translate} scale(1)`
+        : `${translate} translateY(-10px) scale(0.95)`;
 
     xOffset = constrainedX;
     yOffset = constrainedY;
-  };
+  }
 
   // Add event listeners for both mouse and touch events
-  [minimizedPanel, panel].forEach(element => {
+  [minimizedPanel, panel].forEach((element) => {
     // Mouse events
-    element.addEventListener('mousedown', dragStart);
-    
+    element.addEventListener("mousedown", dragStart);
+
     // Touch events
-    element.addEventListener('touchstart', dragStart, { passive: false });
-    
+    element.addEventListener("touchstart", dragStart, { passive: false });
+
     // Add cursor style
-    element.style.cursor = 'move';
+    element.style.cursor = "move";
   });
 
   // Add document-level event listeners
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('mouseup', dragEnd);
-  document.addEventListener('touchmove', drag, { passive: false });
-  document.addEventListener('touchend', dragEnd);
+  document.addEventListener("mousemove", drag);
+  document.addEventListener("mouseup", dragEnd);
+  document.addEventListener("touchmove", drag, { passive: false });
+  document.addEventListener("touchend", dragEnd);
 
   // Modify show/hide panel functions to maintain position
   const originalShowPanel = showPanel;
   const originalHidePanel = hidePanel;
 
-  showPanel = function() {
+  showPanel = function () {
     panel.style.opacity = "1";
     panel.style.visibility = "visible";
     panel.style.pointerEvents = "auto";
     minimizedPanel.style.opacity = "0";
     minimizedPanel.style.pointerEvents = "none";
-    isExpanded = true;
-    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+    let isExpanded = true;
+    if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
   };
 
-  hidePanel = function() {
+  hidePanel = function () {
     panel.style.opacity = "0";
     panel.style.visibility = "hidden";
     panel.style.pointerEvents = "none";
     minimizedPanel.style.opacity = "1";
     minimizedPanel.style.pointerEvents = "auto";
-    isExpanded = false;
-    if (typeof xOffset !== 'undefined' && typeof yOffset !== 'undefined') {
+    let isExpanded = false;
+    if (typeof xOffset !== "undefined" && typeof yOffset !== "undefined") {
       updatePosition(xOffset, yOffset);
     }
   };

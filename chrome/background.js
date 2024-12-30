@@ -108,6 +108,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
   }
+
+  if (message.type === 'GET_PRESIGNED_URL') {
+    getPresignedUrl()
+      .then(response => sendResponse(response))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async response
+  }
 });
 
 async function handleLogin({ email, password }) {
@@ -274,3 +281,32 @@ async function getCookiesForUrl(url) {
   });
 }
   
+
+async function getPresignedUrl() {
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/api/meetings/upload/presigned-url`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Failed to get presigned URL', data);
+      throw new Error(data.message);
+    }
+
+    return {
+      success: true,
+      ...data
+    };
+
+  } catch (error) {
+    console.error('Error fetching presigned URL:', error);
+    return { success: false, error: error.message };
+  }
+}
