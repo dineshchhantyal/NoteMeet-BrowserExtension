@@ -1,4 +1,4 @@
-const AUTH_BASE_URL = "https://notemeet.dineshchhantyal.com";
+const AUTH_BASE_URL = "http://localhost:3000";
 
 // Add this at the top of your file
 chrome.webRequest.onHeadersReceived.addListener(
@@ -101,6 +101,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
   }
+
+  if (message.type === 'GET_MEETINGS') {
+    getMeetings()
+      .then(response => sendResponse(response))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async response
+  }
 });
 
 async function handleLogin({ email, password }) {
@@ -151,6 +158,28 @@ async function handleLogin({ email, password }) {
     return { success: false, error: error.message };
   }
 }
+
+async function getMeetings() {
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/api/meetings`, {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) throw new Error('Meetings fetch failed');
+    const {data} = await response.json();
+    console.log('Meetings data:', data);
+    return { success: true, meetings: data };
+
+  } catch (error) {
+    console.error('Meetings fetch error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 
 async function checkAuth() {
   try {

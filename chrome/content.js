@@ -304,7 +304,63 @@ window.stopScreenRecording = async () => {
     }
 };
 
-async function startRecording() {
+const createMeetingList = () => {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_MEETINGS" }, (response) => {
+      console.log("Meetings response:", response.meetings);
+
+      const meetingsTemplate = response.meetings.map(meeting => `
+        <div class="meeting-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; background-color: #f9f9f9;">
+          <div class="meeting-info" style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span class="meeting-title" style="font-weight: bold; color: rgb(7, 59, 76);">${meeting.title}</span>
+          </div>
+          <div id="meetingControls">
+            <button 
+              id="startRecordingButton_${meeting.id}" 
+              style="
+                padding: 8px 12px; 
+                border: none; 
+                border-radius: 6px; 
+                background-color: rgb(46, 196, 182); 
+                color: white; 
+                cursor: pointer;
+                transition: background-color 0.2s;
+              "
+              onclick="startRecording('${meeting.id}', '${meeting.title}')">
+              Start Recording
+            </button>
+            <span class="recording-indicator" id="recordingIndicator_${meeting.id}" style="display: none; margin-left: 10px; color: rgb(234, 67, 53);">Recording...</span>
+          </div>
+        </div>
+      `).join('');
+      resolve(meetingsTemplate);
+    });
+  });
+};
+
+// Ensure createButton is defined before use
+const createButton = (text, id, primary = false) => `
+    <button 
+      id="${id}"
+      style="
+        width: 100%;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background-color: ${primary ? "rgb(46, 196, 182)" : "rgb(7, 59, 76)"};
+        color: white;
+        margin-bottom: 8px;
+      "
+    >
+      ${text}
+    </button>
+`;
+
+async function startRecording(meetingId, meetingTitle) {
     try {
         // Update UI BEFORE starting the recording
         if (!recordButton) {
@@ -350,29 +406,66 @@ async function startRecording() {
 
         console.log('Requesting screen and audio capture...');
 
-        // Get system audio and screen
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-                displaySurface: "browser",
-                width: { ideal: 1920, max: 1920 },
-                height: { ideal: 1080, max: 1080 },
+        try {
+            // Get system audio and screen
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    displaySurface: "browser",
+                    width: { ideal: 1920, max: 1920 },
+                    height: { ideal: 1080, max: 1080 },
+                    selfBrowserSurface: "include"
+                },
+                audio: true,
                 selfBrowserSurface: "include"
-            },
-            audio: true,
-            selfBrowserSurface: "include"
+            });
 
-        });
+            // Get microphone audio
+            micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 2
+                },
+                video: false,
+            });
+        } catch (error) {
+            console.error('Error accessing media devices:', error);
+            alert("Access to screen or microphone was denied. Please check your browser settings and try again.");
 
-        // Get microphone audio
-        micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 2
-            },
-            video: false,
-        });
+            // Cancel recording if it was initiated
+            if (recorder && recorder.state === 'recording') {
+                recorder.stop(); // Stop the recorder
+                console.log('Recording canceled due to permission denial.');
+            }
+
+            // Reset UI elements related to recording
+            if (recordButton) {
+                isRecording = false;
+                recordButton.textContent = "Start Recording"; // Reset button text
+                recordButton.style.backgroundColor = "#1a73e8"; // Reset button color
+            }
+
+            // Reset all recording indicators for each meeting
+            const recordingIndicators = document.querySelectorAll('.recording-indicator');
+            recordingIndicators.forEach(indicator => {
+                indicator.style.display = 'none'; // Hide all recording indicators
+            });
+
+            // Reset any controls related to recording
+            const controlsDivs = document.querySelectorAll('#recordingControls');
+            controlsDivs.forEach(controlsDiv => {
+                controlsDiv.innerHTML = `
+                    ${createButton("Start Recording", "startRecordingButton", true)}
+                `; // Reset to initial state
+            });
+
+            // Ensure that the recording state is cleared
+            window.recordedVideoBase64 = 'not recording'; // Clear any recorded video data
+            recordedChunks = []; // Clear recorded chunks
+
+            return; // Exit the function if access is denied
+        }
 
         // Create AudioContext and destination first
         audioContext = new AudioContext();
@@ -424,13 +517,31 @@ async function startRecording() {
 
     } catch (error) {
         console.error('Error during screen recording:', error);
-        // Reset UI if recording fails
+        
+        // Reset UI elements related to recording
         if (recordButton) {
             isRecording = false;
-            recordButton.textContent = "New Recording";
-            recordButton.style.backgroundColor = "#1a73e8";
-            recordButton.style.animation = "none";
+            recordButton.textContent = "Start Recording"; // Reset button text
+            recordButton.style.backgroundColor = "#1a73e8"; // Reset button color
         }
+
+        // Reset all recording indicators for each meeting
+        const recordingIndicators = document.querySelectorAll('.recording-indicator');
+        recordingIndicators.forEach(indicator => {
+            indicator.style.display = 'none'; // Hide all recording indicators
+        });
+
+        // Reset any controls related to recording
+        const controlsDivs = document.querySelectorAll('#recordingControls');
+        controlsDivs.forEach(controlsDiv => {
+            controlsDiv.innerHTML = `
+                ${createButton("Start Recording", "startRecordingButton", true)}
+            `; // Reset to initial state
+        });
+
+        // Ensure that the recording state is cleared
+        window.recordedVideoBase64 = null; // Clear any recorded video data
+        recordedChunks = []; // Clear recorded chunks
     }
 }
 
@@ -642,32 +753,6 @@ function floatingWindow() {
     await originalStopScreenRecording();
     updateStatus('idle');
   };
-
-  // Helper function to create styled buttons
-  const createButton = (text, id, primary = false) => `
-    <button 
-      id="${id}"
-      style="
-        width: 100%;
-        padding: 10px 16px;
-        border: none;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background-color: ${primary ? "rgb(46, 196, 182)" : "rgb(7, 59, 76)"};
-        color: white;
-        margin-bottom: 8px;
-        &:hover {
-          opacity: 0.9;
-          transform: translateY(-1px);
-        }
-      "
-    >
-      ${text}
-    </button>
-  `;
 
   // Different panel content based on login state
   loggedOutContent = `
