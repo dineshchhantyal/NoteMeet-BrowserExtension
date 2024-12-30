@@ -7,7 +7,6 @@
     "cookies",
     "storage",
     "webRequest",
-    "webRequestBlocking",
     "webNavigation"
   ],
   "host_permissions": [

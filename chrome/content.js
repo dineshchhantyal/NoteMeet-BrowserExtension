@@ -362,187 +362,76 @@ const createButton = (text, id, primary = false) => `
 
 async function startRecording(meetingId, meetingTitle) {
     try {
-        // Update UI BEFORE starting the recording
-        if (!recordButton) {
-            recordButton = document.querySelector("#startRecordingButton");
-        }
-
-        // Immediately update UI to show recording state
+        // Update UI to show recording state
         if (recordButton) {
             isRecording = true;
             recordButton.textContent = "Stop Recording";
-            recordButton.style.backgroundColor = "#ea4335";
-            recordButton.style.animation = "pulse 2s infinite"; // Add pulsing effect
+            recordButton.style.backgroundColor = "#ea4335"; // Change to red
         }
 
-        // Add CSS for pulsing effect if it doesn't exist
-        if (!document.querySelector('#recording-pulse-style')) {
-            const style = document.createElement('style');
-            style.id = 'recording-pulse-style';
-            style.textContent = `
-                @keyframes pulse {
-                    0% { opacity: 1; }
-                    50% { opacity: 0.7; }
-                    100% { opacity: 1; }
-                }
-            `;
-            document.head.appendChild(style);
-        }
+        // Request screen and audio capture
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+              displaySurface: "browser",
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 },
+              selfBrowserSurface: "include"
+          },
+          audio: true,
+          selfBrowserSurface: "include"
+      });
 
-        recordedChunks = []; // Reset chunks array
-        console.log('Starting recording...');
+      // Get microphone audio
+      micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 2
+          },
+          video: false,
+      });
 
-        // Hide the div with aria-label="Meet keeps you safe"
-        const hidePopupStyle = document.createElement('style');
-        hidePopupStyle.textContent = `
-            div[aria-label="Meet keeps you safe"],
-            div[role="dialog"][data-is-persistent="true"] { 
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-            }
-        `;
-        document.documentElement.appendChild(hidePopupStyle);
-
-        console.log('Requesting screen and audio capture...');
-
-        try {
-            // Get system audio and screen
-            screenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    displaySurface: "browser",
-                    width: { ideal: 1920, max: 1920 },
-                    height: { ideal: 1080, max: 1080 },
-                    selfBrowserSurface: "include"
-                },
-                audio: true,
-                selfBrowserSurface: "include"
-            });
-
-            // Get microphone audio
-            micStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 2
-                },
-                video: false,
-            });
-        } catch (error) {
-            console.error('Error accessing media devices:', error);
-            alert("Access to screen or microphone was denied. Please check your browser settings and try again.");
-
-            // Cancel recording if it was initiated
-            if (recorder && recorder.state === 'recording') {
-                recorder.stop(); // Stop the recorder
-                console.log('Recording canceled due to permission denial.');
-            }
-
-            // Reset UI elements related to recording
-            if (recordButton) {
-                isRecording = false;
-                recordButton.textContent = "Start Recording"; // Reset button text
-                recordButton.style.backgroundColor = "#1a73e8"; // Reset button color
-            }
-
-            // Reset all recording indicators for each meeting
-            const recordingIndicators = document.querySelectorAll('.recording-indicator');
-            recordingIndicators.forEach(indicator => {
-                indicator.style.display = 'none'; // Hide all recording indicators
-            });
-
-            // Reset any controls related to recording
-            const controlsDivs = document.querySelectorAll('#recordingControls');
-            controlsDivs.forEach(controlsDiv => {
-                controlsDiv.innerHTML = `
-                    ${createButton("Start Recording", "startRecordingButton", true)}
-                `; // Reset to initial state
-            });
-
-            // Ensure that the recording state is cleared
-            window.recordedVideoBase64 = 'not recording'; // Clear any recorded video data
-            recordedChunks = []; // Clear recorded chunks
-
-            return; // Exit the function if access is denied
-        }
-
-        // Create AudioContext and destination first
-        audioContext = new AudioContext();
-        const audioDest = audioContext.createMediaStreamDestination();
-        
-        // Then create and connect sources
-        if (screenStream.getAudioTracks().length > 0) {
-            const screenAudioSource = audioContext.createMediaStreamSource(screenStream);
-            screenAudioSource.connect(audioDest);
-        }
-
-        if (micStream.getAudioTracks().length > 0) {
-            const micAudioSource = audioContext.createMediaStreamSource(micStream);
-            micAudioSource.connect(audioDest);
-        }
-
-        // Get audio from DOM elements (meeting participants)
-        const audioElements = Array.from(document.querySelectorAll('audio, video'));
-        audioElements.forEach(element => {
-            if (element.srcObject && element.srcObject.getAudioTracks().length > 0) {
-                const source = audioContext.createMediaStreamSource(element.srcObject);
-                source.connect(audioDest);
-            }
-        });
-
-        // Combine screen video and all audio
-        const combinedStream = new MediaStream([
-            ...screenStream.getVideoTracks(),
-            ...audioDest.stream.getAudioTracks()
-        ]);
-
-        // Create the MediaRecorder instance and store it in the global variable
-        recorder = new MediaRecorder(combinedStream, {
-            mimeType: 'video/webm; codecs=vp8,opus',
-            audioBitsPerSecond: 128000
-        });
-
+        // Combine streams and start recording
+        const combinedStream = new MediaStream([...screenStream.getTracks(), ...micStream.getTracks()]);
+        recorder = new MediaRecorder(combinedStream);
         recorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
-                console.log('Data available, chunk size:', event.data.size);
                 recordedChunks.push(event.data);
             }
         };
-
-        stopRecordingPromise = new Promise((resolve) => recorder.onstop = resolve);
-
         recorder.start();
-        console.log('Recording started, recorder state:', recorder.state);
 
     } catch (error) {
-        console.error('Error during screen recording:', error);
-        
-        // Reset UI elements related to recording
-        if (recordButton) {
-            isRecording = false;
-            recordButton.textContent = "Start Recording"; // Reset button text
-            recordButton.style.backgroundColor = "#1a73e8"; // Reset button color
-        }
-
-        // Reset all recording indicators for each meeting
-        const recordingIndicators = document.querySelectorAll('.recording-indicator');
-        recordingIndicators.forEach(indicator => {
-            indicator.style.display = 'none'; // Hide all recording indicators
-        });
-
-        // Reset any controls related to recording
-        const controlsDivs = document.querySelectorAll('#recordingControls');
-        controlsDivs.forEach(controlsDiv => {
-            controlsDiv.innerHTML = `
-                ${createButton("Start Recording", "startRecordingButton", true)}
-            `; // Reset to initial state
-        });
-
-        // Ensure that the recording state is cleared
-        window.recordedVideoBase64 = null; // Clear any recorded video data
-        recordedChunks = []; // Clear recorded chunks
+        console.error('Error starting recording:', error);
+        alert("Failed to start recording. Please check permissions.");
+        resetUI(); // Call a function to reset the UI
     }
+}
+
+async function stopScreenRecording() {
+    try {
+        if (recorder && recorder.state === 'recording') {
+            recorder.stop();
+            // Wait for data to be available
+            await new Promise(resolve => recorder.onstop = resolve);
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            // Handle the blob (e.g., upload or save)
+        }
+    } catch (error) {
+        console.error('Error stopping recording:', error);
+    } finally {
+        resetUI(); // Ensure UI is reset regardless of success or failure
+    }
+}
+
+function resetUI() {
+    if (recordButton) {
+        isRecording = false;
+        recordButton.textContent = "Start Recording";
+        recordButton.style.backgroundColor = "#1a73e8"; // Reset to original color
+    }
+    // Reset any other UI elements as needed
 }
 
 // Move these variables and functions to the global scope (outside of floatingWindow)
@@ -608,7 +497,7 @@ function floatingWindow() {
     touch-action: none;
   `;
 
-  const showPanel = () => {
+  showPanel = () => {
     panel.style.opacity = "1";
     panel.style.visibility = "visible";
     panel.style.pointerEvents = "auto";
