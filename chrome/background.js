@@ -200,10 +200,9 @@ async function checkAuth() {
     
     if (!response.ok) throw new Error('Auth check failed');
     const session = await response.json();
-    
+    if (!session || !session.user) throw new Error('No user found');
     return { success: true, user: session.user };
   } catch (error) {
-    console.error('Auth check error:', error);
     return { success: false, error: error.message };
   }
 }

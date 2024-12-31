@@ -1,9 +1,10 @@
 import { CONFIG } from "../index.js";
-import { UIManager } from "./UIManager.js";
+import UIManager from "./UIManager.js";
+import UIComponents from "./UIComponent.js";
 
 // Authentication Service
-class AuthService {
-    async checkAuthStatus() {
+export default class AuthService {
+    static async checkAuthStatus() {
         return new Promise((resolve) => {
             chrome.runtime.sendMessage({ type: "CHECK_AUTH" }, (response) => {
                 resolve(response.user || null);
@@ -11,7 +12,7 @@ class AuthService {
         });
     }
 
-    async handleAuth() {
+    static async handleAuth() {
         const loginForm = `
             <div style="text-align: center; padding: 12px 0;">
                 ${UIComponents.createHeader()}
@@ -66,12 +67,13 @@ class AuthService {
         this.attachLoginFormListeners();
     }
 
-    attachLoginFormListeners() {
+    static attachLoginFormListeners() {
         const form = document.getElementById("loginForm");
         form?.addEventListener("submit", this.handleLoginSubmit.bind(this));
     }
 
-    async handleLoginSubmit(e) {
+    static async handleLoginSubmit(e) {
+        e.stopPropagation();
         e.preventDefault();
         const submitButton = document.getElementById("loginSubmitButton");
         const spinner = submitButton.querySelector(".loading-spinner");

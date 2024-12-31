@@ -1,12 +1,15 @@
+import { CONFIG } from "..";
+
+
 // UI Components
-class UIComponents {
+export default class UIComponents {
     constructor() {
         this.panel = null;
-        this.minimizedPanel = null;
+        this.minimizedPanel = null;7
         this.recordButton = null;
     }
 
-    createHeader() {
+    static createHeader() {
         return `
             <div style="text-align: center; margin-bottom: 16px;">
                 <img src="${CONFIG.LOGO_URL}" alt="NoteMeet" style="width: 120px;">
@@ -17,7 +20,7 @@ class UIComponents {
         `;
     }
 
-    createButton(text, id, primary = false) {
+    static createButton(text, id, primary = false) {
         return `
             <button 
                 id="${id}"
@@ -40,7 +43,7 @@ class UIComponents {
         `;
     }
 
-    createLoggedInContent(user) {
+    static createLoggedInContent(user) {
         return `
             <div style="text-align: center;">
                 ${this.createHeader()}
@@ -65,7 +68,7 @@ class UIComponents {
         `;
     }
 
-    createLoggedOutContent() {
+    static createLoggedOutContent() {
         return `
             <div style="text-align: center; padding: 12px 0;">
                 ${this.createHeader()}

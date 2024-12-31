@@ -5,8 +5,8 @@ const CONFIG = {
 };
 
 // Imports
-import { UIManager } from "./js/UIManager.js"; // Ensure proper import syntax
-import { MessageHandler } from "./js/MessageHandler.js"; // Ensure proper import syntax
+import UIManager from "./js/UIManager.js"; // Ensure proper import syntax
+import MessageHandler from "./js/MessageHandler.js"; // Ensure proper import syntax
 
 // State management
 const AppState = {
@@ -17,6 +17,7 @@ const AppState = {
   xOffset: 0,
   yOffset: 0,
   recordedChunks: [],
+  presignedUrl: null,
   mediaState: {
     recorder: null,
     screenStream: null,

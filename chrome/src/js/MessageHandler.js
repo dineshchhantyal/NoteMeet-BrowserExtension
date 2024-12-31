@@ -1,4 +1,7 @@
-class MessageHandler {
+import UIManager from "./UIManager.js";
+import UIComponents from "./UIComponent.js";
+
+export default class MessageHandler {
     static init() {
         chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
     }

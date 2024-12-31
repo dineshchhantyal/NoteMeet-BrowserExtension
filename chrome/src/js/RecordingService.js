@@ -1,6 +1,9 @@
+import { AppState } from "..";
+import UIManager from "./UIManager";
+
 // Recording Service
-class RecordingService {
-    async startRecording() {
+export default class RecordingService {
+    static async startRecording() {
         if (AppState.isRecordingSetupInProgress) {
             console.warn("Recording setup is already in progress.");
             return;
@@ -12,15 +15,20 @@ class RecordingService {
             const response = await new Promise((resolve) => {
                 chrome.runtime.sendMessage({ type: "GET_PRESIGNED_URL" }, resolve);
             });
-
             if (!response?.success) {
                 throw new Error(response?.error || "Failed to get presigned URL");
             }
+            AppState.presignedUrl = response.presignedUrl;
+
+            if (!AppState.presignedUrl) {
+                throw new Error("Failed to get presigned URL");
+            }
 
             UIManager.updateStatus("recording");
-            await this.setupMediaStreams();
-            await this.initializeRecorder();
+            await RecordingService.setupMediaStreams();
+            await RecordingService.initializeRecorder();
         } catch (error) {
+            UIManager.updateStatus("idle");
             console.error("Error starting recording:", error);
             UIManager.resetUI();
             alert("Failed to start recording. Please check permissions.");
@@ -29,7 +37,7 @@ class RecordingService {
         }
     }
 
-    async setupMediaStreams() {
+    static async setupMediaStreams() {
         AppState.mediaState.screenStream =
             await navigator.mediaDevices.getDisplayMedia({
                 video: {
@@ -82,7 +90,7 @@ class RecordingService {
         });
     }
 
-    async initializeRecorder() {
+    static async initializeRecorder() {
         const combinedStream = new MediaStream([
             ...AppState.mediaState.screenStream.getVideoTracks(),
             ...AppState.mediaState.micStream.getAudioTracks(),
@@ -96,17 +104,36 @@ class RecordingService {
 
         AppState.recordedChunks = [];
 
+        const uploadStream = new WritableStream({
+            write: async (chunk, controller) => {
+                try {
+                    await fetch(AppState.presignedUrl, {
+                        method: "PUT",
+                        body: chunk,
+                        headers: {
+                            "Content-Type": "video/webm",
+                        },
+                    });
+                } catch (error) {
+                    console.error("Error uploading chunk:", error);
+                }
+            },
+        });
+
+        const writer = uploadStream.getWriter();
+
         AppState.mediaState.recorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
-                AppState.recordedChunks.push(event.data);
+                AppState.recordedChunks.push(event.data)
+                writer.write(event.data);
             }
         };
 
         AppState.mediaState.recorder.start();
-        UIManager.updateRecordingUI();
+        UIManager.updateRecordingControls();
     }
 
-    async stopRecording() {
+    static async stopRecording() {
         try {
             UIManager.updateStatus("processing");
 
@@ -129,7 +156,7 @@ class RecordingService {
         }
     }
 
-    async processRecordedData() {
+    static async processRecordedData() {
         const recordedBlob = new Blob(AppState.recordedChunks, {
             type: "video/webm",
         });
@@ -144,7 +171,7 @@ class RecordingService {
         });
     }
 
-    async cleanupMediaResources() {
+    static async cleanupMediaResources() {
         if (AppState.mediaState.screenStream) {
             AppState.mediaState.screenStream
                 .getTracks()
