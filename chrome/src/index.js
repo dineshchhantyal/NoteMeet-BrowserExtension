@@ -24,6 +24,7 @@ const AppState = {
     micStream: null,
     audioContext: null,
   },
+  meetingId: null,
 };
 
 // Initialize the application

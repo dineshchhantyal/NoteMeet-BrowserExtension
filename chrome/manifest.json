@@ -6,7 +6,9 @@
   "permissions": [
     "cookies",
     "storage",
-    "webRequest"
+    "webRequest",
+    "activeTab",
+    "desktopCapture"
   ],
   "host_permissions": [
     "https://notemeet.dineshchhantyal.com/*",

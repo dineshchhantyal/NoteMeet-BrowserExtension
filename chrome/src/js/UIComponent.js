@@ -81,13 +81,18 @@ export default class UIComponents {
                     color: white;
                     cursor: pointer;
                     transition: background-color 0.2s ease;
-                ">Record</button>
+                "
+                id="recordButton_${meeting.id}">Record</button>
             </div>
         `;
     }
 
     static createMeetingsList(meetings) {
         console.log(meetings);
+        if (meetings.length === 0) {
+            return "";
+        }
+
         return `
             <div id="noteMeetMeetingsList" style="
                 padding: 16px;

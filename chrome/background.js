@@ -358,7 +358,7 @@ async function getScheduledMeetings() {
 async function getPresignedUploadUrlByMeetingId(meetingId) {
   try {
     const response = await fetch(
-      `${AUTH_BASE_URL}/api/meetings/${meetingId}/presigned-url?type=UPLOAD`,
+      `${AUTH_BASE_URL}/api/meetings/${meetingId}/presigned-url/upload`,
       {
         method: "GET",
         credentials: "include",
@@ -366,7 +366,14 @@ async function getPresignedUploadUrlByMeetingId(meetingId) {
     );
 
     if (!response.ok) throw new Error("Presigned upload URL fetch failed");
-    const { data } = await response.json();
+    
+    // Check if the response is empty or undefined
+    const data = await response.json();
+    if (!data) {
+      console.error("Presigned upload URL data is undefined");
+      throw new Error("No data received from the server");
+    }
+
     console.log("Presigned upload URL data:", data);
     return { success: true, ...data };
   } catch (error) {

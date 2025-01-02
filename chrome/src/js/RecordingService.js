@@ -3,21 +3,38 @@ import UIManager from "./UIManager";
 
 // Recording Service
 export default class RecordingService {
-    static async startRecording() {
+    static async startRecording(meetingId = null) {
         if (AppState.isRecordingSetupInProgress) {
             console.warn("Recording setup is already in progress.");
             return;
         }
 
+        if (meetingId) {
+            AppState.meetingId = meetingId;
+        } else {
+            AppState.meetingId = null;
+        }
+
         AppState.isRecordingSetupInProgress = true;
 
         try {
-            const response = await new Promise((resolve) => {
-                chrome.runtime.sendMessage({ type: "GET_PRESIGNED_URL" }, resolve);
-            });
+            let response;
+            if (AppState.meetingId) {
+                response = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({ type: "GET_PRESIGNED_UPLOAD_URL_BY_MEETING_ID", data: { meetingId: AppState.meetingId } }, resolve);
+                });
+            } else {
+                response = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({ type: "GET_PRESIGNED_URL" }, resolve);
+                });
+            }
+
+            console.log("Response:", response);
+
             if (!response?.success) {
                 throw new Error(response?.error || "Failed to get presigned URL");
             }
+            
             AppState.presignedUrl = response.presignedUrl;
 
             if (!AppState.presignedUrl) {
@@ -29,11 +46,12 @@ export default class RecordingService {
             await RecordingService.initializeRecorder();
         } catch (error) {
             UIManager.updateStatus("idle");
-            console.error("Error starting recording:", error);
+            console.error("Error starting recording:", error.message);
             UIManager.resetUI();
             alert("Failed to start recording. Please check permissions.");
         } finally {
             AppState.isRecordingSetupInProgress = false;
+            AppState.meetingId = null;
         }
     }
 
@@ -187,12 +205,6 @@ export default class RecordingService {
         }
     }
 
-    static async getPresignedUploadUrlByMeetingId(meetingId) {
-        const response = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ type: "GET_PRESIGNED_UPLOAD_URL_BY_MEETING_ID", data: { meetingId } }, resolve);
-        });
-        return response;
-    }
 
     static async getMeetings() {
         const response = await new Promise((resolve) => {

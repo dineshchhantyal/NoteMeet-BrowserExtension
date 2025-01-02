@@ -173,11 +173,12 @@ export default class UIManager {
       signInBtn?.addEventListener("click", () => AuthService.handleAuth());
     } else {
       UIComponents.panel.innerHTML = UIComponents.createLoggedInContent(user);
-      this.attachUserPanelListeners(user);
 
       const meetings = await RecordingService.getMeetings();
       const meetingsListTemplate = UIComponents.createMeetingsList(meetings);
       UIComponents.panel.innerHTML += meetingsListTemplate;
+      this.attachUserPanelListeners(user);
+
     }
 
     // Show the main panel when hovering over the minimized panel
@@ -199,12 +200,24 @@ export default class UIManager {
 
     // Ensure the button exists before adding the event listener
     if (startBtn) {
-      startBtn.addEventListener("click", RecordingService.startRecording);
+      startBtn.addEventListener("click", () => RecordingService.startRecording());
     } else {
       console.error("Start Recording Button not found!");
     }
 
     syncStatusBtn?.addEventListener("click", this.handleSyncStatus.bind(this));
+
+    // Attach event listeners for dynamically created record buttons
+    const meetingButtons = UIComponents.panel.querySelectorAll("[id^='recordButton_']");
+    console.log("Meeting buttons:", meetingButtons);
+    meetingButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        console.log("Record button clicked");
+        const meetingId = button.id.split('_')[1]; // Extract meeting ID from button ID
+        console.log("Meeting ID:", meetingId);
+        RecordingService.startRecording(meetingId);
+      });
+    });
   }
 
   static togglePanel() {
@@ -254,6 +267,12 @@ export default class UIManager {
 
     const stopBtn = controlsDiv.querySelector("#stopRecordingButton");
     stopBtn?.addEventListener("click", this.handleStopRecording.bind(this));
+
+    if (AppState.meetingId) {
+      const meetingItemRecordButton = UIComponents.panel.querySelector(`#recordButton_${AppState.meetingId}`);
+      meetingItemRecordButton.disabled = true;
+      meetingItemRecordButton.textContent = "Recording...";
+    }
   }
 
   static async handleStopRecording() {
