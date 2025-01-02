@@ -6,13 +6,10 @@
   "permissions": [
     "cookies",
     "storage",
-    "webRequest",
-    "webNavigation"
+    "webRequest"
   ],
   "host_permissions": [
     "https://notemeet.dineshchhantyal.com/*",
-    "https://meet.google.com/*",
-    "https://zoom.us/*",
     "http://localhost:3000/*"
   ],
   "background": {

@@ -186,4 +186,22 @@ export default class RecordingService {
             await AppState.mediaState.audioContext.close();
         }
     }
+
+    static async getPresignedUploadUrlByMeetingId(meetingId) {
+        const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "GET_PRESIGNED_UPLOAD_URL_BY_MEETING_ID", data: { meetingId } }, resolve);
+        });
+        return response;
+    }
+
+    static async getMeetings() {
+        const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "GET_MEETINGS" }, resolve);
+        });
+        if (response.success) {
+            return response.meetings;
+        }
+        return [];
+    }
 }
+

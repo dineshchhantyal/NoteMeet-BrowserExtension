@@ -2,46 +2,51 @@ const AUTH_BASE_URL = "http://localhost:3000";
 
 // Add this at the top of your file
 chrome.webRequest.onHeadersReceived.addListener(
-  function(details) {
+  function (details) {
     for (const header of details.responseHeaders) {
-      if (header.name.toLowerCase() === 'set-cookie' && header.value.includes('authjs.session-token')) {
+      if (
+        header.name.toLowerCase() === "set-cookie" &&
+        header.value.includes("authjs.session-token")
+      ) {
         const cookie = parseCookie(header.value);
         // Store cookie specifically for the extension
         chrome.cookies.set({
           url: AUTH_BASE_URL,
           name: cookie.name,
           value: cookie.value,
-          path: cookie.path || '/',
+          path: cookie.path || "/",
           httpOnly: cookie.httpOnly || false,
           secure: cookie.secure || false,
-          sameSite: cookie.sameSite || 'lax',
-          expirationDate: cookie.expires ? new Date(cookie.expires).getTime() / 1000 : undefined
+          sameSite: cookie.sameSite || "lax",
+          expirationDate: cookie.expires
+            ? new Date(cookie.expires).getTime() / 1000
+            : undefined,
         });
       }
     }
     return { responseHeaders: details.responseHeaders };
   },
-  { urls: ["http://localhost:3000/*", "https://notemeet.dineshchhantyal.com/*"] },
+  { urls: ["https://notemeet.dineshchhantyal.com/*", "http://localhost:3000/*"] },
   ["responseHeaders", "extraHeaders"]
 );
 
 function parseCookie(cookieStr) {
-  const parts = cookieStr.split(';').map(p => p.trim());
+  const parts = cookieStr.split(";").map((p) => p.trim());
   const [nameValue, ...attributes] = parts;
-  const [name, value] = nameValue.split('=').map(s => s.trim());
-  
+  const [name, value] = nameValue.split("=").map((s) => s.trim());
+
   const cookie = { name, value };
-  
-  attributes.forEach(attr => {
-    const [key, val] = attr.split('=').map(s => s.trim());
+
+  attributes.forEach((attr) => {
+    const [key, val] = attr.split("=").map((s) => s.trim());
     const keyLower = key.toLowerCase();
-    if (keyLower === 'path') cookie.path = val;
-    if (keyLower === 'expires') cookie.expires = val;
-    if (keyLower === 'httponly') cookie.httpOnly = true;
-    if (keyLower === 'secure') cookie.secure = true;
-    if (keyLower === 'samesite') cookie.sameSite = val.toLowerCase();
+    if (keyLower === "path") cookie.path = val;
+    if (keyLower === "expires") cookie.expires = val;
+    if (keyLower === "httponly") cookie.httpOnly = true;
+    if (keyLower === "secure") cookie.secure = true;
+    if (keyLower === "samesite") cookie.sameSite = val.toLowerCase();
   });
-  
+
   return cookie;
 }
 
@@ -49,26 +54,31 @@ function parseCookie(cookieStr) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("Background received message:", message); // Debug log
 
-  if (message.type === 'LOGIN') {
+  if (message.type === "LOGIN") {
     handleLogin(message.data)
-      .then(response => {sendResponse(response);
+      .then((response) => {
+        sendResponse(response);
         chrome.tabs.query({}, (tabs) => {
           tabs.forEach((tab) => {
-            chrome.tabs.sendMessage(tab.id, {
-              type: "AUTH_STATE_CHANGED",
-              user: response.user
-            }).catch(err => console.log(`Failed to send message to tab ${tab.id}:`, err));
+            chrome.tabs
+              .sendMessage(tab.id, {
+                type: "AUTH_STATE_CHANGED",
+                user: response.user,
+              })
+              .catch((err) =>
+                console.log(`Failed to send message to tab ${tab.id}:`, err)
+              );
           });
         });
       })
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Will respond asynchronously
   }
-  
-  if (message.type === 'CHECK_AUTH') {
+
+  if (message.type === "CHECK_AUTH") {
     checkAuth()
-      .then(response => sendResponse(response))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Will respond asynchronously
   }
 
@@ -81,11 +91,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (tabs[0]) {
             chrome.tabs.sendMessage(tabs[0].id, {
               type: "AUTH_STATE_CHANGED",
-              user: null
+              user: null,
             });
           }
         });
-        
+
         sendResponse({ success: true });
       });
     } catch (error) {
@@ -95,24 +105,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep the message channel open for async response
   }
 
-  if (message.type === 'LOGOUT') {
+  if (message.type === "LOGOUT") {
     handleLogout()
-      .then(response => sendResponse({ success: true }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then((response) => sendResponse({ success: true }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
   }
 
-  if (message.type === 'GET_MEETINGS') {
+  if (message.type === "GET_MEETINGS") {
     getMeetings()
-      .then(response => sendResponse(response))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
   }
 
-  if (message.type === 'GET_PRESIGNED_URL') {
+  if (message.type === "GET_PRESIGNED_URL") {
     getPresignedUrl()
-      .then(response => sendResponse(response))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async response
+  }
+
+  if (message.type === "GET_SCHEDULED_MEETINGS") {
+    getScheduledMeetings()
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async response
+  }
+
+  if (message.type === "GET_PRESIGNED_UPLOAD_URL_BY_MEETING_ID") {
+    getPresignedUploadUrlByMeetingId(message.data.meetingId)
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
   }
 });
@@ -121,86 +145,89 @@ async function handleLogin({ email, password }) {
   try {
     // 1. Get CSRF token
     const csrfResponse = await fetch(`${AUTH_BASE_URL}/api/auth/csrf`, {
-      method: 'GET',
-      credentials: 'include',
+      method: "GET",
+      credentials: "include",
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
     });
-    
-    if (!csrfResponse.ok) throw new Error('Failed to get CSRF token');
-    
+
+    if (!csrfResponse.ok) throw new Error("Failed to get CSRF token");
+
     const { csrfToken } = await csrfResponse.json();
 
     // 2. Perform login with proper cookie handling
-    const loginResponse = await fetch(`${AUTH_BASE_URL}/api/auth/callback/credentials`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        csrfToken,
-        email,
-        password,
-        json: true
-      })
-    });
+    const loginResponse = await fetch(
+      `${AUTH_BASE_URL}/api/auth/callback/credentials`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          csrfToken,
+          email,
+          password,
+          json: true,
+        }),
+      }
+    );
 
     if (!loginResponse.ok) {
-      throw new Error('Login failed: ' + loginResponse.statusText);
+      throw new Error("Login failed: " + loginResponse.statusText);
     }
 
     // 3. Verify authentication immediately after login
     const authResponse = await checkAuth();
     if (!authResponse.success) {
-      throw new Error(authResponse.error || 'Authentication failed after login');
+      throw new Error(
+        authResponse.error || "Authentication failed after login"
+      );
     }
 
     return { success: true, user: authResponse.user };
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("Login error:", error);
     return { success: false, error: error.message };
   }
 }
 
 async function getMeetings() {
   try {
-    const response = await fetch(`${AUTH_BASE_URL}/api/meetings`, {
-      credentials: 'include',
+    const response = await fetch(`${AUTH_BASE_URL}/api/meetings/scheduled`, {
+      credentials: "include",
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      }
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
     });
 
-    if (!response.ok) throw new Error('Meetings fetch failed');
-    const {data} = await response.json();
-    console.log('Meetings data:', data);
+    if (!response.ok) throw new Error("Meetings fetch failed");
+    const { data } = await response.json();
+    console.log("Meetings data:", data);
     return { success: true, meetings: data };
-
   } catch (error) {
-    console.error('Meetings fetch error:', error);
+    console.error("Meetings fetch error:", error);
     return { success: false, error: error.message };
   }
 }
 
-
 async function checkAuth() {
   try {
     const response = await fetch(`${AUTH_BASE_URL}/api/auth/session`, {
-      credentials: 'include',
+      credentials: "include",
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      }
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
     });
-    
-    if (!response.ok) throw new Error('Auth check failed');
+
+    if (!response.ok) throw new Error("Auth check failed");
     const session = await response.json();
-    if (!session || !session.user) throw new Error('No user found');
+    if (!session || !session.user) throw new Error("No user found");
     return { success: true, user: session.user };
   } catch (error) {
     return { success: false, error: error.message };
@@ -211,16 +238,16 @@ async function handleSignOut() {
   try {
     // 1. Clear extension's storage
     await chrome.storage.local.clear();
-    
+
     // 2. Clear extension-specific cookies
     const cookies = await chrome.cookies.getAll({
-      domain: new URL(AUTH_BASE_URL).hostname
+      domain: new URL(AUTH_BASE_URL).hostname,
     });
-    
+
     for (const cookie of cookies) {
       await chrome.cookies.remove({
         url: `${AUTH_BASE_URL}${cookie.path}`,
-        name: cookie.name
+        name: cookie.name,
       });
     }
 
@@ -237,75 +264,113 @@ async function handleSignOut() {
 
 // Helper functions to manage cookies
 async function storeCookiesFromHeader(cookieHeader) {
-  console.log('Storing cookies from header:', cookieHeader);
-  
+  console.log("Storing cookies from header:", cookieHeader);
+
   // Split on comma only if not within a quoted string
   const cookies = cookieHeader.split(/,(?=\s*[^"]*(?:"[^"]*"[^"]*)*$)/);
-  
+
   for (const cookie of cookies) {
     try {
-      const [nameValue, ...parts] = cookie.split(';');
-      const [name, value] = nameValue.split('=').map(s => s.trim());
-      
+      const [nameValue, ...parts] = cookie.split(";");
+      const [name, value] = nameValue.split("=").map((s) => s.trim());
+
       console.log(`Setting cookie: ${name}=${value}`);
-      
+
       const cookieDetails = {
         url: AUTH_BASE_URL,
         name: name,
         value: value,
-        path: '/',
+        path: "/",
         secure: false, // Set to true if using HTTPS
-        httpOnly: false
+        httpOnly: false,
       };
-      
+
       // Extract additional parameters
       for (const part of parts) {
-        const [key, val] = part.split('=').map(s => s.trim());
-        if (key.toLowerCase() === 'path') cookieDetails.path = val;
-        if (key.toLowerCase() === 'domain') cookieDetails.domain = val;
-        if (key.toLowerCase() === 'secure') cookieDetails.secure = true;
-        if (key.toLowerCase() === 'httponly') cookieDetails.httpOnly = true;
+        const [key, val] = part.split("=").map((s) => s.trim());
+        if (key.toLowerCase() === "path") cookieDetails.path = val;
+        if (key.toLowerCase() === "domain") cookieDetails.domain = val;
+        if (key.toLowerCase() === "secure") cookieDetails.secure = true;
+        if (key.toLowerCase() === "httponly") cookieDetails.httpOnly = true;
       }
 
       await chrome.cookies.set(cookieDetails);
     } catch (error) {
-      console.error('Error setting cookie:', error, 'Cookie string:', cookie);
+      console.error("Error setting cookie:", error, "Cookie string:", cookie);
     }
   }
 }
 
 async function getCookiesForUrl(url) {
   return await chrome.cookies.getAll({
-    url: url
+    url: url,
   });
 }
-  
 
 async function getPresignedUrl() {
   try {
-    const response = await fetch(`${AUTH_BASE_URL}/api/meetings/upload/presigned-url`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+    const response = await fetch(
+      `${AUTH_BASE_URL}/api/meetings/upload/presigned-url`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
       }
-    });
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Failed to get presigned URL', data);
+      console.error("Failed to get presigned URL", data);
       throw new Error(data.message);
     }
 
     return {
       success: true,
-      ...data
+      ...data,
     };
-
   } catch (error) {
-    console.error('Error fetching presigned URL:', error);
+    console.error("Error fetching presigned URL:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function getScheduledMeetings() {
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/api/meetings/scheduled`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) throw new Error("Scheduled meetings fetch failed");
+    const { data } = await response.json();
+    console.log("Scheduled meetings data:", data);
+    return { success: true, meetings: data };
+  } catch (error) {
+    console.error("Error fetching scheduled meetings:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function getPresignedUploadUrlByMeetingId(meetingId) {
+  try {
+    const response = await fetch(
+      `${AUTH_BASE_URL}/api/meetings/${meetingId}/presigned-url?type=UPLOAD`,
+      {
+        method: "GET",
+        credentials: "include",
+      }
+    );
+
+    if (!response.ok) throw new Error("Presigned upload URL fetch failed");
+    const { data } = await response.json();
+    console.log("Presigned upload URL data:", data);
+    return { success: true, ...data };
+  } catch (error) {
+    console.error("Error fetching presigned upload URL:", error);
     return { success: false, error: error.message };
   }
 }

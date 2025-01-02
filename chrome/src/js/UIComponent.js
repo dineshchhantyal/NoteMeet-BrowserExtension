@@ -5,7 +5,8 @@ import { CONFIG } from "..";
 export default class UIComponents {
     constructor() {
         this.panel = null;
-        this.minimizedPanel = null;7
+        this.minimizedPanel = null;
+        this.meetingsList = null;
         this.recordButton = null;
     }
 
@@ -68,6 +69,37 @@ export default class UIComponents {
         `;
     }
 
+    static createMeetingItem(meeting) {
+        return `
+            <div class="meeting-item" style="margin-bottom: 10px;">
+                <div class="meeting-title" style="font-weight: bold; color: rgb(7, 59, 76);">${meeting.title}</div>
+                <button class="meeting-action" style="
+                    padding: 8px 12px;
+                    border: none;
+                    border-radius: 4px;
+                    background-color: rgb(46, 196, 182);
+                    color: white;
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                ">Record</button>
+            </div>
+        `;
+    }
+
+    static createMeetingsList(meetings) {
+        console.log(meetings);
+        return `
+            <div id="noteMeetMeetingsList" style="
+                padding: 16px;
+                background-color: #ffffff;
+                border: 2px solid rgb(46, 196, 182);
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(7, 59, 76, 0.12);
+            ">
+                ${meetings.map(this.createMeetingItem).join('')}
+            </div>
+        `;
+    }
     static createLoggedOutContent() {
         return `
             <div style="text-align: center; padding: 12px 0;">

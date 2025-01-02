@@ -7,9 +7,9 @@ import AuthService from "./AuthService";
 export default class UIManager {
   static init() {
     this.initializeStyles();
+    this.checkInitialAuth();
     this.createFloatingWindow();
     this.attachEventListeners();
-    this.checkInitialAuth();
   }
 
   static initializeStyles() {
@@ -166,7 +166,7 @@ export default class UIManager {
     UIComponents.minimizedPanel.appendChild(dot);
   }
 
-  static updatePanelContent(user) {
+  static async updatePanelContent(user) {
     if (!user) {
       UIComponents.panel.innerHTML = UIComponents.createLoggedOutContent();
       const signInBtn = UIComponents.panel.querySelector("#signInButton");
@@ -174,6 +174,10 @@ export default class UIManager {
     } else {
       UIComponents.panel.innerHTML = UIComponents.createLoggedInContent(user);
       this.attachUserPanelListeners(user);
+
+      const meetings = await RecordingService.getMeetings();
+      const meetingsListTemplate = UIComponents.createMeetingsList(meetings);
+      UIComponents.panel.innerHTML += meetingsListTemplate;
     }
 
     // Show the main panel when hovering over the minimized panel
