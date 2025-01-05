@@ -3,7 +3,10 @@ import UIManager from "./UIManager";
 
 // Recording Service
 export default class RecordingService {
+    static recordingTimeout = null; // Add a property to hold the timeout reference
+
     static async startRecording(meetingId = null) {
+        console.log("AppState.userLimits", AppState.userLimits);
         if (AppState.isRecordingSetupInProgress) {
             console.warn("Recording setup is already in progress.");
             return;
@@ -44,6 +47,16 @@ export default class RecordingService {
             UIManager.updateStatus("recording");
             await RecordingService.setupMediaStreams();
             await RecordingService.initializeRecorder();
+
+            // Set a timer to stop recording based on user limits
+            if (AppState.userLimits && AppState.userLimits.meetingDuration) {
+                const durationInMinutes = AppState.userLimits.meetingDuration;
+                const durationInMilliseconds = durationInMinutes * 60 * 1000;
+
+                this.recordingTimeout = setTimeout(() => {
+                    this.stopRecording(); // Automatically stop recording
+                }, durationInMilliseconds);
+            }
         } catch (error) {
             UIManager.updateStatus("idle");
             console.error("Error starting recording:", error.message);
@@ -152,6 +165,12 @@ export default class RecordingService {
     }
 
     static async stopRecording() {
+        // Clear the timeout if recording is stopped manually
+        if (this.recordingTimeout) {
+            clearTimeout(this.recordingTimeout);
+            this.recordingTimeout = null;
+        }
+
         try {
             UIManager.updateStatus("processing");
 

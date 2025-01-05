@@ -1,6 +1,10 @@
+const isProduction = true;
+
 // Constants
 const CONFIG = {
-  AUTH_BASE_URL: "http://localhost:3000",
+  AUTH_BASE_URL: isProduction
+    ? "https://notemeet.dineshchhantyal.com"
+    : "http://localhost:3000",
   LOGO_URL: chrome.runtime.getURL("icons/icon.png"),
 };
 
@@ -14,8 +18,8 @@ const AppState = {
   isRecordingSetupInProgress: false,
   isExpanded: false,
   recordedVideoBase64: null,
-  xOffset: 0,
-  yOffset: 0,
+  x: 0,
+  y: 0,
   recordedChunks: [],
   presignedUrl: null,
   mediaState: {
@@ -25,6 +29,12 @@ const AppState = {
     audioContext: null,
   },
   meetingId: null,
+  userLimits: {
+    meetingsAllowed: 0,
+    storageLimit: 0,
+    meetingDuration: 0,
+  },
+  userSubscription: null,
 };
 
 // Initialize the application

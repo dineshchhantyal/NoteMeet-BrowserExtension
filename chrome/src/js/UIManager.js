@@ -98,6 +98,13 @@ export default class UIManager {
 
   static async checkInitialAuth() {
     const user = await AuthService.checkAuthStatus();
+    const data = await AuthService.getUserSubscription();
+    if (user && data && data.subscriptions && data.limits) {
+      user.subscriptions = data.subscriptions;
+      user.limits = data.limits;
+      AppState.userLimits = data.limits;
+      AppState.userSubscription = data.subscriptions;
+    }
     this.updatePanelContent(user);
   }
 
@@ -178,7 +185,6 @@ export default class UIManager {
       const meetingsListTemplate = UIComponents.createMeetingsList(meetings);
       UIComponents.panel.innerHTML += meetingsListTemplate;
       this.attachUserPanelListeners(user);
-
     }
 
     // Show the main panel when hovering over the minimized panel
@@ -200,7 +206,9 @@ export default class UIManager {
 
     // Ensure the button exists before adding the event listener
     if (startBtn) {
-      startBtn.addEventListener("click", () => RecordingService.startRecording());
+      startBtn.addEventListener("click", () =>
+        RecordingService.startRecording()
+      );
     } else {
       console.error("Start Recording Button not found!");
     }
@@ -208,12 +216,14 @@ export default class UIManager {
     syncStatusBtn?.addEventListener("click", this.handleSyncStatus.bind(this));
 
     // Attach event listeners for dynamically created record buttons
-    const meetingButtons = UIComponents.panel.querySelectorAll("[id^='recordButton_']");
+    const meetingButtons = UIComponents.panel.querySelectorAll(
+      "[id^='recordButton_']"
+    );
     console.log("Meeting buttons:", meetingButtons);
-    meetingButtons.forEach(button => {
+    meetingButtons.forEach((button) => {
       button.addEventListener("click", () => {
         console.log("Record button clicked");
-        const meetingId = button.id.split('_')[1]; // Extract meeting ID from button ID
+        const meetingId = button.id.split("_")[1]; // Extract meeting ID from button ID
         console.log("Meeting ID:", meetingId);
         RecordingService.startRecording(meetingId);
       });
@@ -269,7 +279,9 @@ export default class UIManager {
     stopBtn?.addEventListener("click", this.handleStopRecording.bind(this));
 
     if (AppState.meetingId) {
-      const meetingItemRecordButton = UIComponents.panel.querySelector(`#recordButton_${AppState.meetingId}`);
+      const meetingItemRecordButton = UIComponents.panel.querySelector(
+        `#recordButton_${AppState.meetingId}`
+      );
       meetingItemRecordButton.disabled = true;
       meetingItemRecordButton.textContent = "Recording...";
     }
@@ -291,17 +303,25 @@ export default class UIManager {
 
   static showPostRecordingControls() {
     const controlsDiv = UIComponents.panel.querySelector("#recordingControls");
+    // controlsDiv.innerHTML = `
+    //         ${UIComponents.createButton(
+    //           "Start New Recording",
+    //           "startRecordingButton",
+    //           true
+    //         )}
+    //         ${UIComponents.createButton(
+    //           "Save Recording Locally",
+    //           "saveRecordingButton"
+    //         )}
+    //     `;
+
     controlsDiv.innerHTML = `
-            ${UIComponents.createButton(
-              "Start New Recording",
-              "startRecordingButton",
-              true
-            )}
-            ${UIComponents.createButton(
-              "Save Recording Locally",
-              "saveRecordingButton"
-            )}
-        `;
+    ${UIComponents.createButton(
+      "Start New Recording",
+      "startRecordingButton",
+      true
+    )}
+`;
 
     this.attachPostRecordingListeners();
   }
@@ -315,8 +335,17 @@ export default class UIManager {
     );
 
     newRecordingBtn?.addEventListener("click", () => {
-      AuthService.checkAuthStatus().then((user) => {
-        if (user) this.updatePanelContent(user);
+      AuthService.checkAuthStatus().then(async (user) => {
+        if (user) {
+          const data = await AuthService.getUserSubscription();
+          if (data) {
+            user.subscriptions = data.subscriptions;
+            user.limits = data.limits;
+            AppState.userLimits = user.limits;
+            AppState.userSubscription = user.subscriptions;
+          }
+          this.updatePanelContent(user);
+        }
       });
     });
 
@@ -448,5 +477,152 @@ export default class UIManager {
         this.handleSaveRecording.bind(this)
       );
     }
+
+    UIComponents.panel.style.cursor = "grab";
+
+    // Bind the methods to preserve context
+    this.boundDragMouseDown = this.dragMouseDown.bind(this);
+    this.boundElementDrag = this.elementDrag.bind(this);
+    this.boundCloseDragElement = this.closeDragElement.bind(this);
+
+    // Only attach mousedown initially
+    UIComponents.panel.addEventListener("mousedown", this.boundDragMouseDown);
+  }
+  static dragMouseDown(e) {
+    if (!e) return;
+    e.preventDefault();
+
+    UIComponents.panel.style.cursor = "grabbing";
+
+    AppState.isDragging = true;
+    AppState.startX = e.clientX;
+    AppState.startY = e.clientY;
+    AppState.initialLeft = UIComponents.panel.offsetLeft;
+    AppState.initialTop = UIComponents.panel.offsetTop;
+    AppState.panelWidth = UIComponents.panel.offsetWidth;
+    AppState.panelHeight = UIComponents.panel.offsetHeight;
+
+    document.addEventListener("mousemove", this.boundElementDrag);
+    document.addEventListener("mouseup", this.boundCloseDragElement);
+  }
+
+  static elementDrag(e) {
+    if (!e || !AppState.isDragging) return;
+    e.preventDefault();
+
+    const dx = e.clientX - AppState.startX;
+    const dy = e.clientY - AppState.startY;
+
+    let newLeft = AppState.initialLeft + dx;
+    let newTop = AppState.initialTop + dy;
+
+    // Ensure panel stays within screen bounds
+    const maxLeft = window.innerWidth - AppState.panelWidth;
+    const maxTop = window.innerHeight - AppState.panelHeight;
+
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
+
+    UIComponents.panel.style.left = `${newLeft}px`;
+    UIComponents.panel.style.top = `${newTop}px`;
+  }
+
+  static closeDragElement() {
+    if (!AppState.isDragging) return;
+
+    UIComponents.panel.style.cursor = "grab";
+
+    document.removeEventListener("mousemove", this.boundElementDrag);
+    document.removeEventListener("mouseup", this.boundCloseDragElement);
+
+    const panel = UIComponents.panel;
+    const minimizedPanel = UIComponents.minimizedPanel;
+    const screenWidth = window.innerWidth;
+
+    // Get current position
+    const currentLeft = panel.offsetLeft;
+    const currentTop = panel.offsetTop;
+
+    // Only consider left and right distances
+    const distanceToLeft = currentLeft;
+    const distanceToRight = screenWidth - (currentLeft + panel.offsetWidth);
+
+    // Determine whether to snap to left or right
+    let finalLeft;
+    if (distanceToLeft < distanceToRight) {
+      finalLeft = 0; // Snap to left
+    } else {
+      finalLeft = screenWidth - minimizedPanel.offsetWidth; // Snap to right
+    }
+
+    // Keep the current vertical position
+    const finalTop = currentTop;
+
+    // Function to apply position
+    const applyPosition = (element) => {
+      element.style.transition = "all 0.3s ease";
+      element.style.left = `${finalLeft}px`;
+      element.style.top = `${finalTop}px`;
+    };
+
+    // Apply positions to both panels
+    applyPosition(panel);
+    applyPosition(minimizedPanel);
+
+    // Store final position
+    localStorage.setItem(
+      "panelPosition",
+      JSON.stringify({
+        left: finalLeft,
+        top: finalTop,
+        side: distanceToLeft < distanceToRight ? "left" : "right",
+      })
+    );
+
+    // Reset transitions after animation
+    setTimeout(() => {
+      panel.style.transition = "";
+      minimizedPanel.style.transition = "";
+    }, 300);
+
+    // Reset drag state
+    AppState.isDragging = false;
+    AppState.startX = null;
+    AppState.startY = null;
+    this.restorePosition();
+  }
+  static restorePosition() {
+    const savedPosition = localStorage.getItem("panelPosition");
+    if (savedPosition) {
+      const { left, top, side } = JSON.parse(savedPosition);
+
+      // Ensure restored position is within bounds
+      const maxLeft = window.innerWidth - UIComponents.minimizedPanel.offsetWidth;
+      const maxTop = window.innerHeight - UIComponents.minimizedPanel.offsetHeight;
+
+      const boundedLeft = Math.max(0, Math.min(left, maxLeft));
+      const boundedTop = Math.max(0, Math.min(top, maxTop));
+
+      // Apply position to minimized panel
+      UIComponents.minimizedPanel.style.left = `${boundedLeft}px`;
+      UIComponents.minimizedPanel.style.top = `${boundedTop}px`;
+
+      // Position main panel based on minimized panel's position
+      const panelLeft = side === 'right' 
+        ? boundedLeft - UIComponents.panel.offsetWidth + UIComponents.minimizedPanel.offsetWidth
+        : boundedLeft + UIComponents.minimizedPanel.offsetWidth - UIComponents.panel.offsetWidth;
+        
+      UIComponents.panel.style.left = `${Math.max(0, panelLeft)}px`;
+      UIComponents.panel.style.top = `${boundedTop}px`;
+    }
+  }
+
+  static cleanup() {
+    UIComponents.panel.removeEventListener(
+      "mousedown",
+      this.boundDragMouseDown
+    );
+    document.removeEventListener("mousemove", this.boundElementDrag);
+    document.removeEventListener("mouseup", this.boundCloseDragElement);
   }
 }

@@ -1,4 +1,6 @@
-const AUTH_BASE_URL = "http://localhost:3000";
+const isProduction = true;
+
+const AUTH_BASE_URL = isProduction ? "https://notemeet.dineshchhantyal.com" : "http://localhost:3000";
 
 // Add this at the top of your file
 chrome.webRequest.onHeadersReceived.addListener(
@@ -26,7 +28,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     }
     return { responseHeaders: details.responseHeaders };
   },
-  { urls: ["https://notemeet.dineshchhantyal.com/*", "http://localhost:3000/*"] },
+  { urls: [`${AUTH_BASE_URL}/*`] },
   ["responseHeaders", "extraHeaders"]
 );
 
@@ -135,6 +137,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "GET_PRESIGNED_UPLOAD_URL_BY_MEETING_ID") {
     getPresignedUploadUrlByMeetingId(message.data.meetingId)
+      .then((response) => sendResponse(response))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async response
+  }
+
+  if (message.type === "GET_USER_SUBSCRIPTION") {
+    getUserSubscription()
       .then((response) => sendResponse(response))
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
@@ -378,6 +387,24 @@ async function getPresignedUploadUrlByMeetingId(meetingId) {
     return { success: true, ...data };
   } catch (error) {
     console.error("Error fetching presigned upload URL:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+
+async function getUserSubscription() {
+  try {
+    const response = await fetch(`${AUTH_BASE_URL}/api/users/subscriptions/me`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) throw new Error("User subscription fetch failed");
+    const { data } = await response.json();
+    console.log("User subscription data:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error fetching user subscription:", error);
     return { success: false, error: error.message };
   }
 }

@@ -12,6 +12,14 @@ export default class AuthService {
         });
     }
 
+    static async getUserSubscription() {
+        return new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: "GET_USER_SUBSCRIPTION" }, (response) => {
+                resolve(response.data || null);
+            });
+        });
+    }
+
     static async handleAuth() {
         const loginForm = `
             <div style="text-align: center; padding: 12px 0;">
