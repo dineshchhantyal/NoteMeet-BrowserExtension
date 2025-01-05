@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "NoteMeet Recorder",
+  "name": "NoteMeet Meeting Recorder",
   "version": "3.1",
-  "description": "Login to NoteMeet and record your meetings seamlessly.",
+  "description": "Record your online meetings and we will take notes for you using advanced AI.",
   "permissions": [
     "cookies",
     "storage",
