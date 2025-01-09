@@ -35,6 +35,9 @@ export default class RecordingService {
             console.log("Response:", response);
 
             if (!response?.success) {
+                // toast the message
+                UIManager.updateStatus("idle");
+
                 throw new Error(response?.error || "Failed to get presigned URL");
             }
             
@@ -61,7 +64,11 @@ export default class RecordingService {
             UIManager.updateStatus("idle");
             console.error("Error starting recording:", error.message);
             UIManager.resetUI();
-            alert("Failed to start recording. Please check permissions.");
+            if (error && error.message && error.message.error){
+                alert(error.message.error);
+            } else {
+                alert(error.message);
+            }
         } finally {
             AppState.isRecordingSetupInProgress = false;
             AppState.meetingId = null;
