@@ -54,17 +54,18 @@ export default class UIComponents {
                         <div style="font-size: 12px; color: #666;">${user.email}</div>
                     </div>
                 </div>
-             ${user.subscriptions && user.subscriptions.length > 0 ? <div style="margin-bottom: 16px;">
-                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Your Subscription
-                    <span style="font-size: 12px; color: #666; background-color: #f0f0f0; padding: 4px 8px; border-radius: 4px;">${user.subscriptions[0].plan.name ? user.subscriptions[0].plan.name : "Free"}</span>
-                </div>
-                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Meetings Allowed</div>
-                <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.meetingsAllowed ? user.limits.meetingsAllowed : 0}</div>
-                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Storage Limit</div>
-                <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.storageLimit ? user.limits.storageLimit + ' GB' : '0 GB'}</div>
-                <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Meeting Duration</div>
-                <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.meetingDuration ? Math.floor(user.limits.meetingDuration / 60) + 'h ' + (user.limits.meetingDuration % 60) + 'm' : '0m'}</div>
-            </div> : ""}
+             ${user.subscriptions && user.subscriptions.length > 0 ? `
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Your Subscription
+                        <span style="font-size: 12px; color: #666; background-color: #f0f0f0; padding: 4px 8px; border-radius: 4px;">${user.subscriptions[0].plan.name ? user.subscriptions[0].plan.name : "Free"}</span>
+                    </div>
+                    <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Meetings Allowed</div>
+                    <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.meetingsAllowed ? user.limits.meetingsAllowed : 0}</div>
+                    <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Storage Limit</div>
+                    <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.storageLimit ? user.limits.storageLimit + ' GB' : '0 GB'}</div>
+                    <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Meeting Duration</div>
+                    <div style="font-size: 24px; font-weight: 600; color: rgb(7, 59, 76);">${user.limits.meetingDuration ? Math.floor(user.limits.meetingDuration / 60) + 'h ' + (user.limits.meetingDuration % 60) + 'm' : '0m'}</div>
+                </div>` : ""}
                 <div id="recordingControls">
                     ${this.createButton("Start Recording", "startRecordingButton", true)}
                 </div>

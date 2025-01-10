@@ -58,6 +58,7 @@ export default class RecordingService {
 
                 this.recordingTimeout = setTimeout(() => {
                     this.stopRecording(); // Automatically stop recording
+                    UIManager.showPostRecordingControls(); // Show the post recording controls
                 }, durationInMilliseconds);
             }
         } catch (error) {
